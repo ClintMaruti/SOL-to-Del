@@ -1,0 +1,58 @@
+---
+description: Form component spacing, border radius, and submit button loading standards
+globs: "**/form/**/*.tsx,**/*Form*.tsx,**/*Card*.tsx,**/features/**/ui/*.tsx"
+alwaysApply: false
+---
+
+# Form UI Standards
+
+Use consistent spacing and border radius for form category components to prevent layout and visual drift from mockups.
+
+## Rules
+
+1. **Border radius:** Form cards, inputs, and form-related containers use `rounded-[6px]` (6px).
+2. **Spacing between form fields:** Use `gap-2` or `space-y-2` (8px) between form fields within a card or section.
+3. **Submit button loading:** Use `Button` from `@sol/ui` with **`isLoading={...}`** — it overlays `Spinner` on the label (label stays in layout, visually hidden while loading). Do not hand-roll spinner + `invisible` spans unless `asChild` forces it. Do not swap the label to "Saving…".
+
+## Tailwind Usage
+
+```tsx
+// Form card container
+<Card className="rounded-[6px]">
+  <CardContent className="space-y-2">
+    {/* 8px between fields */}
+  </CardContent>
+</Card>
+```
+
+```tsx
+// Grid of form fields
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  {/* 8px gap between items */}
+</div>
+```
+
+```tsx
+// Vertical stack of fields
+<div className="space-y-2">
+  <FormField />
+  <FormField />
+</div>
+```
+
+### Submit button with loading (`isLoading`)
+
+```tsx
+<Button type="submit" form={formId} disabled={disableAll} isLoading={isPending}>
+  {submitButtonLabel}
+</Button>
+```
+
+`isLoading` sets `aria-busy`, disables the button, and applies `relative` + spinner overlay internally. **`isLoading` is ignored when `asChild` is true** (Radix `Slot`); use manual overlay only in that rare case.
+
+## Values
+
+| Property | Value | Tailwind |
+|----------|-------|----------|
+| Border radius | 6px | `rounded-[6px]` |
+| Spacing between fields | 8px | `gap-2` or `space-y-2` |

@@ -1,0 +1,93 @@
+{
+  "intlLocale": "es-ES",
+  "welcome": "Bienvenido",
+  "hello": "¡Hola {{name}}!",
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "update": "Actualizar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "reset": "Restablecer",
+    "close": "Cerrar",
+    "submit": "Enviar",
+    "goToHome": "Ir al inicio",
+    "goBack": "Volver",
+    "tryAgain": "Intentar de nuevo",
+    "ok": "Ok",
+    "leaveWithoutSaving": "Salir sin guardar",
+    "duplicate": "Duplicar"
+  },
+  "messages": {
+    "loading": "Cargando...",
+    "noData": "No hay datos disponibles",
+    "error": "Ocurrió un error",
+    "success": "Operación completada con éxito",
+    "copied": "¡Copiado!",
+    "failedToDelete": "Error al eliminar",
+    "noResultsFound": "No se encontraron resultados"
+  },
+  "errors": {
+    "pageNotFound": "Página no encontrada",
+    "pageNotFoundDescription": "La página que busca no existe.",
+    "somethingWentWrong": "Algo salió mal",
+    "unexpectedError": "Ocurrió un error inesperado. Intente volver o regresar al inicio.",
+    "errorDetailsDev": "Detalles del error (solo desarrollo)"
+  },
+  "placeholders": {
+    "selectDate": "Seleccionar fecha",
+    "optional": "Opcional",
+    "typeHere": "Escriba aquí.",
+    "typeInstructions": "Escriba instrucciones específicas aquí.",
+    "select": "Seleccionar..."
+  },
+  "dialogs": {
+    "leavePageTitle": "¿Salir de esta página?",
+    "unsavedChanges": "Tiene cambios sin guardar...",
+    "unsavedChangesDescription": "Tiene cambios sin guardar. Si sale ahora, se perderán."
+  },
+  "aria": {
+    "formActions": "Acciones del formulario",
+    "pageSections": "Secciones de la página",
+    "previousMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
+    "copyValue": "Copiar {{value}}",
+    "moreInfo": "Más información",
+    "searchOptions": "Buscar opciones"
+  },
+  "calendar": {
+    "weekdaysShort": ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"],
+    "monthsShort": [
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dic"
+    ],
+    "monthsFull": [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre"
+    ]
+  }
+}

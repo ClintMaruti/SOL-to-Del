@@ -1,0 +1,11 @@
+# Admin is built with base "/admin/". Publish this folder (not apps/admin/dist).
+[[redirects]]
+  from = "/"
+  to = "/admin/"
+  status = 302
+
+# SPA fallback for client-side routes under /admin
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin/index.html"
+  status = 200

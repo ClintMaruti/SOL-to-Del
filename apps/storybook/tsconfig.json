@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@storybook/react": ["./node_modules/@storybook/react"],
+      "@storybook/react-vite": ["./node_modules/@storybook/react-vite"],
+      "@sol/ui": ["../../packages/ui/src/index.ts"],
+      "@sol/ui/*": ["../../packages/ui/src/*"],
+      "@sol/i18n": ["../../packages/i18n/src/index.ts"],
+      "@sol/api-client": ["../../packages/api-client/src/index.ts"],
+      "@sol/types": ["../../packages/types/src/index.ts"]
+    }
+  },
+  "include": [
+    ".storybook/**/*",
+    "../../packages/ui/src/components/ui/**/*.stories.tsx"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,2 @@
+import{b as r,j as e}from"./index-4ewCJrNr.js";function a(){const{t:s}=r(["admin","common"]);return e.jsxs("div",{className:"p-8",children:[e.jsx("h1",{className:"text-4xl font-bold text-foreground mb-4",children:s("admin:pages.sourceMarket")}),e.jsx("p",{className:"text-muted-foreground",children:s("admin:pages.sourceMarketDescription")})]})}export{a as SourceMarketPage};
+//# sourceMappingURL=SourceMarketPage-CSKb2t_a.js.map

@@ -1,0 +1,42 @@
+---
+description: List sort order after mutations and long-operation UX
+globs: "**/entities/**/api/*.ts,**/widgets/**/*List*.tsx"
+alwaysApply: false
+---
+
+# List Ordering & Performance
+
+Preserve list sort order after mutations and provide feedback for long-running operations.
+
+## Rules
+
+1. **Preserve sort order after mutations.** After toggling status or updating an item, either: (a) invalidate and refetch (keeps server sort), or (b) use `setQueryData` and re-sort the list in place. Don't let the list order change arbitrarily (e.g. toggled item jumping).
+2. **New items placement.** When inserting a newly created item via `setQueryData`, place it according to the list's sort order (e.g. by name), not just at the end.
+3. **Long operations.** For operations that may take long (e.g. delete with cascades), show loading/disabled state and avoid multiple submissions.
+
+## Examples
+
+```typescript
+// GOOD: Invalidate refetches and preserves server sort
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["destinations"] });
+},
+```
+
+```typescript
+// GOOD: Optimistic update, preserve sort order
+queryClient.setQueryData(["agents"], (prev) => {
+  if (!prev) return prev;
+  const updated = prev.map((a) => (a.id === id ? { ...a, isActive: !a.isActive } : a));
+  return [...updated].sort((a, b) => a.lastName.localeCompare(b.lastName));
+});
+```
+
+```typescript
+// GOOD: Disable during long operation
+<Button disabled={isPending} onClick={handleDelete}>
+  {isPending ? "Deleting..." : "Delete"}
+</Button>
+```
+
+**Reference:** `entities/agent/api/useToggleAgentStatus.ts`, `features/delete-destination/api/useDeleteDestination.ts`

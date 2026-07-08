@@ -1,0 +1,53 @@
+---
+description: Page and route loading UX — avoid stacked spinners; use skeletons and coordinated Suspense fallbacks
+globs: "apps/admin/src/pages/**/*.tsx,apps/admin/src/shared/ui/route-builder.tsx,apps/admin/src/features/auth-provider/**/*.tsx,apps/admin/src/widgets/**/*Skeleton*.tsx"
+alwaysApply: false
+---
+
+# Page loading UX (admin app)
+
+Avoid **sequential full-page spinners** (auth → lazy chunk → data). Users should see **one** blocking phase where possible, then **layout + progressive skeletons** for content.
+
+## Layering model
+
+1. **Auth** — `ProtectedRoute` / `PublicRoute` show `PageLoader variant="fullscreen"` only while `useAuthStore().isLoading` is true.
+2. **Lazy route chunk** — `Suspense` fallback in `route-builder.tsx` must **not** duplicate the auth spinner. Use the smart fallback pattern below.
+3. **Data** — Prefer **skeleton UIs** inside `MainLayout` that mirror the final page structure, not another centered `PageLoader` for the whole viewport.
+
+Reference: `apps/admin/src/shared/ui/route-builder.tsx`, `apps/admin/src/features/auth-provider/ui/ProtectedRoute.tsx`.
+
+## Suspense + auth (required for lazy routes)
+
+`SmartPageSkeleton` (or equivalent) should return **`null` while auth is still loading** so only the auth fullscreen spinner shows; after auth completes, show `PageLoader` (or a light fallback) **only** for chunk loading.
+
+```tsx
+// Pattern: subscribe to useAuthStore isLoading; if true return null; else return <PageLoader /> or skeleton
+```
+
+Do **not** render a second fullscreen or large centered spinner in the Suspense fallback when `isAuthLoading` is true.
+
+## Detail and heavy pages (data fetching)
+
+When a page loads entity data after mount:
+
+- **Do** return a **colocated skeleton** component (e.g. `SupplierDetailSkeleton`, `AgencyDetailSkeleton`) that reuses `Skeleton` / `SkeletonCard` from `@sol/ui` and `@/shared/ui`.
+- **Do** place skeletons in `widgets/<feature>/ui/*Skeleton.tsx` and export from the widget index when shared with the page.
+- **Avoid** `return <PageLoader />` for the primary loading state of a detail page if it replaces the entire main content with a second full-area spinner after the route is already interactive — prefer structure-preserving skeletons.
+
+Inline spinners: `PageLoader variant="inline"` is fine for **small regions** (e.g. a subsection), not as a repeat of the whole-page loading pattern.
+
+## Lists and tables
+
+Use existing patterns such as `TableLoadingSkeleton` or list-level skeleton rows where the codebase already does — keep list loading consistent with sibling features (see supplier/agent/agency list widgets).
+
+## Checklist for new routes / pages
+
+- [ ] Lazy route wrapped by existing `BuildRouteElement` (do not add a duplicate `Suspense` + `PageLoader` around the same component without coordinating auth).
+- [ ] No second **fullscreen** spinner after navigation for the same transition.
+- [ ] Loading UI for data matches page layout (skeleton > generic spinner for detail pages).
+- [ ] Submit buttons follow `form-ui-standards.mdc` (spinner overlay, not “Saving…” text).
+
+## Anti-patterns
+
+- Stacking `PageLoader` (default or fullscreen) at **both** route Suspense **and** page root for the same navigation step without guarding auth.
+- Replacing the entire detail view with a generic spinner when a **skeleton** already exists or can be added next to the form layout.

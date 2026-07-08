@@ -1,0 +1,24 @@
+# Use this ONLY if you already deployed apps/admin/dist contents at the site root.
+# Add via Netlify: Site configuration -> Build & deploy -> Redirects (or _redirects file).
+#
+# Prefer instead: pnpm build:admin:netlify and deploy netlify-publish/
+
+[[redirects]]
+  from = "/admin/assets/*"
+  to = "/assets/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/admin/PawPrint.svg"
+  to = "/PawPrint.svg"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/"
+  to = "/admin/"
+  status = 302

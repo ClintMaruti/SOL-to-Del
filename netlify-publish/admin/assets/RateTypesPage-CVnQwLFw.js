@@ -1,0 +1,2 @@
+import{b as t,j as e}from"./index-4ewCJrNr.js";function n(){const{t:s}=t(["admin","common"]);return e.jsxs("div",{className:"p-8",children:[e.jsx("h1",{className:"text-4xl font-bold text-foreground mb-4",children:s("admin:pages.rateTypes")}),e.jsx("p",{className:"text-muted-foreground",children:s("admin:pages.rateTypesDescription")})]})}export{n as RateTypesPage};
+//# sourceMappingURL=RateTypesPage-CVnQwLFw.js.map

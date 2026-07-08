@@ -1,0 +1,63 @@
+---
+description: Use DatePickerGridInput for all date fields with FormField and error highlight
+globs: "**/form/**/*.tsx,**/*Form*.tsx,**/*Modal*.tsx,**/*Card*.tsx,**/features/**/ui/*.tsx,**/widgets/**/ui/*.tsx"
+alwaysApply: false
+---
+
+# Date Picker Standards
+
+All date and date-range fields in the admin app must use **DatePickerGridInput** (not DatePickerInput or DateRangePicker) and follow the same FormField and error-highlight pattern.
+
+## Rules
+
+1. **Component:** Use `DatePickerGridInput` from `@/shared/ui` (or `@/shared/ui/DatePicker`) for every date field. Do not use `DatePickerInput`, `DateRangePicker`, or raw `DatePicker` for new form fields.
+2. **FormField:** Wrap date fields in `FormField` when the value is part of a form (TanStack Form). Use the field's `value`, `onChange`, and validators as usual.
+3. **Error highlight:** Pass a `className` that includes `border-destructive` when there are validation errors and `bg-white/70` for consistency:
+   - `className={cn(field.state.meta.errors.length > 0 && "border-destructive", "bg-white/70")}`
+4. **Placeholders:** Use i18n placeholders: `t("placeholders.selectStartDate")` / `t("placeholders.selectEndDate")` or `t("admin:placeholders.selectStartDate")` as appropriate for the namespace.
+5. **Date ranges:** For from/to date pairs, use **two** `DatePickerGridInput` components (one for from, one for to), not `DateRangePicker`. Each input gets the same error-highlight pattern when the row/section has an error (e.g. `hasError && "border-destructive"`).
+6. **Without FormField:** If the date is not bound to a form (e.g. custom state or store), still use `DatePickerGridInput` and apply the same visual pattern: `className={cn(hasError && "border-destructive", "bg-white/70")}`.
+7. **Shared popover variants:** If Figma specifies a direct range-calendar popover or a relative-range confirmation popover, implement or reuse that surface as a shared variant in `apps/admin/src/shared/ui/DatePicker.tsx` instead of building a feature-local one-off popover body.
+
+## Do not use
+
+- `DatePickerInput` for new date fields
+- `DateRangePicker` for new from/to date pairs (use two `DatePickerGridInput` instead)
+- Raw `DatePicker` in form UIs (it is used internally by the input components)
+- Missing error highlight (always show `border-destructive` when the field or row has a validation error)
+
+## Reference implementation
+
+**Canonical example:** `apps/admin/src/widgets/supplier-form/ui/PaymentTermsCard.tsx` — see the `travelDatesFrom` / `travelDatesTo` fields (FormField + DatePickerGridInput + `cn(field.state.meta.errors.length > 0 && "border-destructive", "bg-white/70")`).
+
+## Example
+
+```tsx
+import { cn } from "@sol/ui";
+import { DatePickerGridInput } from "@/shared/ui";
+import { FormField } from "@/shared/ui/form";
+
+<FormField
+  form={form}
+  name="validFrom"
+  label={t("labels.validFrom")}
+  required
+  validators={{ onSubmit: ({ value }) => !value ? "Required" : undefined }}
+>
+  {(field) => (
+    <DatePickerGridInput
+      value={field.state.value}
+      onChange={(v) => field.handleChange(v)}
+      placeholder={t("placeholders.selectStartDate")}
+      className={cn(
+        field.state.meta.errors.length > 0 && "border-destructive",
+        "bg-white/70"
+      )}
+    />
+  )}
+</FormField>
+```
+
+## Disabled / read-only dates
+
+For display-only or disabled date values, still use `DatePickerGridInput` with `disabled` and the same background: `className="opacity-50 bg-white/70"` (or as needed for the layout).

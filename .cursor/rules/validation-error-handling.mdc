@@ -1,0 +1,46 @@
+---
+description: Field-level validation, API error mapping, and response guards
+globs: "**/*.ts,**/*.tsx"
+alwaysApply: false
+---
+
+# Validation & Error Handling
+
+Show meaningful, field-specific errors instead of generic messages. Guard against unexpected API responses.
+
+## Rules
+
+1. **Field-level validation.** Use `getValidationErrors`, `getFieldError`, `toFormErrors` from `@sol/api-client` to map backend validation to form fields. Never show generic "One or more errors occurred!" when the API returns field-specific messages.
+2. **Don't show raw backend strings.** Map PascalCase property names to user-friendly messages with `toFormErrors` or equivalent.
+3. **Coordinate validation.** If Lat/Long must come in pairs, validate both together and show a combined error (e.g. "Both Latitude and Longitude must be provided").
+4. **Guard `.map()` on API responses.** If the API can return non-array (204, null, object wrapper), use `Array.isArray(data) ? data : []` before `.map()`. Avoid `.map is not a function` crashes.
+
+## Examples
+
+```typescript
+// BAD: Generic error
+toast.error("One or more errors occurred!");
+
+// GOOD: Use getErrorMessage for validation errors
+toast.error(getErrorMessage(error, "Failed to save"));
+```
+
+```typescript
+// BAD: Assume API returns array
+const items = apiData.map((item) => transform(item));
+
+// GOOD: Guard before map
+const items = Array.isArray(apiData) ? apiData : [];
+const transformed = items.map((item) => transform(item));
+```
+
+```typescript
+// GOOD: Map backend errors to form fields
+const validation = getValidationErrors(error);
+if (validation) {
+  const formErrors = toFormErrors(validation.errors);
+  setErrors(formErrors);
+}
+```
+
+**Reference:** `packages/api-client/src/error-utils.ts`, `entities/destination/api/useDestinations.ts`

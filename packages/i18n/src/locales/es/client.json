@@ -1,0 +1,25 @@
+{
+  "navigation": {
+    "home": "Inicio",
+    "about": "Acerca de",
+    "safaris": "Safaris",
+    "contact": "Contacto",
+    "bookNow": "Reservar ahora"
+  },
+  "hero": {
+    "title": "Descubre Safaris Increíbles",
+    "subtitle": "Experimenta la naturaleza como nunca antes",
+    "cta": "Explorar Safaris"
+  },
+  "filters": {
+    "destination": "Destino",
+    "duration": "Duración",
+    "price": "Precio",
+    "apply": "Aplicar Filtros",
+    "clear": "Limpiar Filtros"
+  },
+  "scaffold": {
+    "title": "Configuración de Cliente Tailwind + shadcn/ui",
+    "testButton": "Botón de Prueba del Cliente"
+  }
+}

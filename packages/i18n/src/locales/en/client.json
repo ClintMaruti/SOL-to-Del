@@ -1,0 +1,25 @@
+{
+  "navigation": {
+    "home": "Home",
+    "about": "About",
+    "safaris": "Safaris",
+    "contact": "Contact",
+    "bookNow": "Book Now"
+  },
+  "hero": {
+    "title": "Discover Amazing Safaris",
+    "subtitle": "Experience the wild like never before",
+    "cta": "Explore Safaris"
+  },
+  "filters": {
+    "destination": "Destination",
+    "duration": "Duration",
+    "price": "Price",
+    "apply": "Apply Filters",
+    "clear": "Clear Filters"
+  },
+  "scaffold": {
+    "title": "Client Tailwind + shadcn/ui Setup",
+    "testButton": "Client Test Button"
+  }
+}

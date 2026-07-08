@@ -1,0 +1,2 @@
+import{b as n,j as e}from"./index-4ewCJrNr.js";function t(){const{t:s}=n(["admin","common"]);return e.jsxs("div",{className:"p-8",children:[e.jsx("h1",{className:"text-4xl font-bold text-foreground mb-4",children:s("admin:pages.serviceTypes")}),e.jsx("p",{className:"text-muted-foreground",children:s("admin:pages.serviceTypesDescription")})]})}export{t as ServiceTypesPage};
+//# sourceMappingURL=ServiceTypesPage-Zf-85zf7.js.map

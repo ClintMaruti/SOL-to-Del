@@ -1,0 +1,38 @@
+---
+description: IntersectionObserver spy-scroll Safari compatibility
+globs: "**/useActiveSection*.ts,**/hooks/*.ts"
+alwaysApply: false
+---
+
+# Intersection Observer (Spy Scroll) - Safari
+
+Safari handles `IntersectionObserver` differently from Chrome. Use pixel-based values for reliable behaviour.
+
+## Rules
+
+1. **rootMargin in pixels.** Safari's percentage-based `rootMargin` is unreliable. Use pixel values computed from `window.innerHeight` instead of percentages (e.g. `-${topPx}px 0px -${bottomPx}px 0px`).
+2. **Last section.** Ensure the last section (e.g. "Other") is included in the active-zone logic. Use viewport bounds (top/bottom threshold in px) so scroll-to-bottom highlights the last section.
+
+## Examples
+
+```typescript
+// BAD: Percentage rootMargin (unreliable in Safari)
+rootMargin: "-10% 0px -10% 0px"
+
+// GOOD: Pixel values from viewport
+function getRootMarginPx(): string {
+  const topPx = Math.round(window.innerHeight * 0.1);
+  const bottomPx = Math.round(window.innerHeight * 0.1);
+  return `-${topPx}px 0px -${bottomPx}px 0px`;
+}
+```
+
+```typescript
+// GOOD: Bottom threshold for last section
+const BOTTOM_THRESHOLD_PX = 80;
+if (scrollTop + clientHeight >= scrollHeight - BOTTOM_THRESHOLD_PX) {
+  return lastSectionId;
+}
+```
+
+**Reference:** `shared/hooks/useActiveSection.ts` - `getRootMarginPx()`, `getActiveZoneBounds()`, `BOTTOM_THRESHOLD_PX`

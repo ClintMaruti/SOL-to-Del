@@ -1,0 +1,2 @@
+import{a as i}from"./index-4ewCJrNr.js";import{u}from"./error-utils-q4z9blzD.js";import{a as g}from"./normalizeAgency-DfuuCJRS.js";function y(e){const a=typeof e=="string"?[e]:e??[],r=Array.from(new Set(a.filter(Boolean))).sort(),t=r.length>0?["agencies",{agencyGroupIds:r}]:["agencies"];return u({queryKey:t,queryFn:async()=>{const n=new URLSearchParams;for(const c of r)n.append("agencyGroupIds",c);const o=n.toString(),s=await i.get(`/catalog/agencies${o?`?${o}`:""}`);return g(s)}})}export{y as u};
+//# sourceMappingURL=useAgencies-DrPr8YuL.js.map

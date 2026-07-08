@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnpm-store
+**/node_modules
+
+# Build outputs
+dist
+dist-ssr
+**/dist
+apps/storybook/storybook-static
+*.local
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+playwright-report/
+test-results/
+coverage/
+.playwright-browsers/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local-only doc (not for remote)
+docs/LOCAL_ONLY.md
+
+.npmrc

@@ -1,0 +1,32 @@
+---
+description: API contract compliance and destination-type business rules
+globs: "**/features/**/*.ts,**/entities/**/api/*.ts"
+alwaysApply: false
+---
+
+# Business Logic & API Conventions
+
+Follow the API contract and enforce domain rules in forms.
+
+## Rules
+
+1. **Soft delete.** When the backend implements soft delete via DELETE, use `api.delete()` not `api.put()`. Follow the API contract.
+2. **Child destination type.** When creating a child destination (parent selected), disable the "Country" type option. Country must be top-level only.
+
+## Examples
+
+```typescript
+// BAD: PUT for soft delete
+await api.put(`/catalog/locations/${id}`, { deleted: true });
+
+// GOOD: DELETE for soft delete
+await api.delete(`/catalog/locations/${destinationId}`);
+```
+
+```typescript
+// GOOD: Disable Country when parent is locked (creating child)
+const isDisabled = isParentLocked && dtype === "Country";
+<ToggleGroupItem value="Country" disabled={isDisabled} />
+```
+
+**Reference:** `features/delete-destination/api/useDeleteDestination.ts`, `features/create-destination/ui/CreateDestinationModal.tsx`

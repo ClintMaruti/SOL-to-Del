@@ -1,0 +1,2 @@
+function s(r){return t=>Array.isArray(t)?t.map(r):t&&typeof t=="object"&&"id"in t?r(t):t}function c({queryClient:r,rootQueryKey:t,entityId:i,toggle:n,skipDetailKeyWhenSecondSegmentMatchesEntityId:u=!0}){const f=s(n);r.setQueryData(t,a=>Array.isArray(a)?a.map(n):a),r.getQueryCache().findAll({queryKey:[...t]}).forEach(({queryKey:a})=>{a.length!==1&&(u&&a.length===2&&a[1]===i||r.setQueryData(a,f))})}export{c as u};
+//# sourceMappingURL=toggleStatusQueryCache-YxzYzh1F.js.map

@@ -1,0 +1,93 @@
+{
+  "intlLocale": "en-GB",
+  "welcome": "Welcome",
+  "hello": "Hello {{name}}!",
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "update": "Update",
+    "search": "Search",
+    "filter": "Filter",
+    "reset": "Reset",
+    "close": "Close",
+    "submit": "Submit",
+    "goToHome": "Go to Home",
+    "goBack": "Go back",
+    "tryAgain": "Try again",
+    "ok": "Ok",
+    "leaveWithoutSaving": "Leave without saving",
+    "duplicate": "Duplicate"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "noData": "No data available",
+    "error": "An error occurred",
+    "success": "Operation completed successfully",
+    "copied": "Copied!",
+    "failedToDelete": "Failed to delete",
+    "noResultsFound": "No results found"
+  },
+  "errors": {
+    "pageNotFound": "Page not found",
+    "pageNotFoundDescription": "The page you are looking for does not exist.",
+    "somethingWentWrong": "Something went wrong",
+    "unexpectedError": "An unexpected error occurred. Try going back or returning to the home page.",
+    "errorDetailsDev": "Error details (dev only)"
+  },
+  "placeholders": {
+    "selectDate": "Select date",
+    "optional": "Optional",
+    "typeHere": "Type anything here.",
+    "typeInstructions": "Type any specific instructions here.",
+    "select": "Select..."
+  },
+  "dialogs": {
+    "leavePageTitle": "Leave this page?",
+    "unsavedChanges": "You have unsaved changes...",
+    "unsavedChangesDescription": "You have unsaved changes. If you leave now, they will be lost."
+  },
+  "aria": {
+    "formActions": "Form actions",
+    "pageSections": "Page sections",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "copyValue": "Copy {{value}}",
+    "moreInfo": "More information",
+    "searchOptions": "Search options"
+  },
+  "calendar": {
+    "weekdaysShort": ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
+    "monthsShort": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "monthsFull": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ]
+  }
+}

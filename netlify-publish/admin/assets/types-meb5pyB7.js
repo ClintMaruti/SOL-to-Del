@@ -1,0 +1,2 @@
+const e=[0,1,2,3,4,5],s={NotRated:0,OneStar:1,TwoStars:2,ThreeStars:3,FourStars:4,FiveStars:5};function o(r){if(r==null||r==="")return 0;if(typeof r=="number"){if(!Number.isFinite(r))return 0;const t=Math.round(r);return e.includes(t)?t:0}if(typeof r=="string"){const t=r.trim();if(t in s)return s[t];const n=Number(t);if(!Number.isNaN(n)&&Number.isFinite(n)){const i=Math.round(n);return e.includes(i)?i:0}}return 0}function u(r){return{...r,starRating:o(r.starRating)}}export{e as S,u as n,o as p};
+//# sourceMappingURL=types-meb5pyB7.js.map

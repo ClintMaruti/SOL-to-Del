@@ -1,0 +1,2 @@
+import{j as r,d as x}from"./index-4ewCJrNr.js";function t({className:e,orientation:s="horizontal",text:l,...a}){return l&&s==="horizontal"?r.jsxs("div",{className:x("flex items-center gap-3 w-full",e),...a,children:[r.jsx("div",{className:"flex-1 h-px bg-border"}),r.jsx("span",{className:"text-sm text-muted-foreground",children:l}),r.jsx("div",{className:"flex-1 h-px bg-border"})]}):r.jsx("div",{className:x("shrink-0 bg-border",s==="horizontal"?"h-px w-full":"h-full w-px",e),...a})}export{t as S};
+//# sourceMappingURL=separator-D4C172Zt.js.map

@@ -1,0 +1,31 @@
+---
+description: Format and conventions for creating feature tickets from Figma designs
+globs: "**/*.plan.md,**/.cursor/plans/**"
+alwaysApply: false
+---
+
+# Ticket Creation Conventions
+
+When creating feature tickets from Figma designs (or plans, Jira, GitLab):
+
+## Required Sections
+
+Every implementation ticket MUST include:
+
+- **Title:** `[FE] Short descriptive name`
+- **Description:** 1–2 sentence summary
+- **Scope:** Bullet list (UI, form fields, validation, API, edge cases)
+- **API specification:** Route, method, request/response, success/error codes
+- **Testing:** Hooks and components to test; key scenarios
+- **MSW:** Controller to create or extend (if API)
+- **File structure:** FSD layout (entities, features, widgets, pages)
+
+## Project Alignment
+
+- **FSD:** Entities for domain data; features for user actions; widgets for UI compositions
+- **Naming:** `useSupplierContracts`, `SupplierContractsList`, `AttachContractModal`
+- **Reference:** `supplier-head-offices`, `supplier-services`, `create-supplier-head-office`
+
+## Skill Reference
+
+For full workflow and template: `.cursor/skills/create-tickets/SKILL.md`

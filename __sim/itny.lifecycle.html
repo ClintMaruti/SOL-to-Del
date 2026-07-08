@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Itinerary Lifecycles — itny reference</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a3340; --dim:#8b97a7;
+    --fg:#e6edf3; --acc:#4493f8; --good:#3fb950; --bad:#f85149; --warn:#d29922; --pend:#a371f7; --rec:#56d4dd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  header h1{font-size:15px;margin:0;font-weight:650}
+  header .sp{flex:1}
+  a{color:var(--acc)}
+  .hbtn{font:inherit;cursor:pointer;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 11px;text-decoration:none}
+  .hbtn:hover{border-color:var(--acc)}
+  .wrap{max-width:1240px;margin:0 auto;padding:18px 18px 80px}
+  nav.toc{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 18px}
+  nav.toc a{font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 12px;text-decoration:none}
+  nav.toc a:hover{border-color:var(--acc)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:18px}
+  h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  h2 .n{color:var(--dim);font-weight:600;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+  h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:18px 0 8px}
+  p.lead{color:var(--dim);margin:2px 0 10px;max-width:88ch}
+  .note{font-size:12px;color:var(--dim);background:#0f1620;border-left:3px solid var(--acc);border-radius:0 6px 6px 0;padding:7px 11px;margin:8px 0}
+  .why{font-size:12px;color:var(--dim)}
+  code,.kbd{font:11px ui-monospace,Menlo,Consolas,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  /* flow diagram */
+  .flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:6px 0 4px}
+  .fbox{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 10px;text-align:center;min-width:96px}
+  .fbox b{display:block;font-size:12px}
+  .fbox span{display:block;font-size:10px;color:var(--dim)}
+  .fbox.term{border-color:var(--bad)} .fbox.start{border-color:var(--acc)}
+  .farr{color:var(--dim);padding:0 7px;font-size:14px;white-space:nowrap}
+  .farr small{display:block;font-size:9px;color:var(--acc);text-align:center;margin-top:-3px}
+  .branchrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .branch{flex:1;min-width:230px;background:#0f1620;border:1px solid var(--line);border-radius:7px;padding:9px 11px}
+  .branch .bh{font-size:11px;font-weight:700;color:var(--warn);margin-bottom:5px}
+  .branch .bs{font-size:12px;color:var(--dim);line-height:1.6}
+  /* tables / matrices */
+  .scroll{overflow:auto;border:1px solid var(--line);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:600;background:#0f1620;position:sticky;top:0}
+  table.mx td,table.mx th{text-align:center;white-space:nowrap}
+  table.mx td.rh,table.mx th.rh{text-align:left;white-space:normal;min-width:150px;position:sticky;left:0;background:var(--panel);z-index:1}
+  table.mx td.pc{text-align:left;white-space:normal;color:var(--dim);min-width:210px;font-size:11px}
+  th .sub{display:block;font-size:9px;color:var(--acc);font-weight:500}
+  .yes{color:var(--good);font-weight:700} .nob{color:#48515f}
+  .cond{color:var(--warn);font-weight:700;cursor:help}
+  .rid{font-size:9px;color:var(--dim);font-weight:400}
+  ol.checklist{margin:0;padding-left:16px;font-size:11px;color:var(--dim)} ol.checklist li{margin:1px 0}
+  .cat{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 6px;border:1px solid var(--line)}
+  .cat-itny{color:var(--acc);border-color:var(--acc)} .cat-item{color:var(--warn);border-color:var(--warn)} .cat-pendingChanges{color:var(--pend);border-color:var(--pend)} .cat-voucher{color:var(--rec);border-color:var(--rec)} .cat-document{color:var(--good);border-color:var(--good)}
+  /* view-catalogue (getViews) scope chips — itinerary reuses the itny accent */
+  .cat-itinerary{color:var(--acc);border-color:var(--acc)} .cat-pax{color:var(--rec);border-color:var(--rec)} .cat-change{color:var(--pend);border-color:var(--pend)}
+  .pill{display:inline-block;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:650;border:1px solid var(--line)}
+  .chipgrp{display:inline-flex;align-items:stretch;background:var(--panel2);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .chipgrp .gl{display:flex;align-items:center;padding:0 8px;background:#0f151f;color:var(--dim);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-right:1px solid var(--line)}
+  .chipgrp .chip{display:flex;align-items:center;padding:3px 9px;font-size:11px;font-weight:650}
+  .statecol{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+  .rec-NeedsRequest{color:var(--acc);border-color:var(--acc)} .rec-AwaitingSupplier{color:var(--warn);border-color:var(--warn)}
+  .rec-NeedsDecision{color:var(--bad);border-color:var(--bad)} .rec-Booked{color:var(--good);border-color:var(--good)} .rec-Rejected{color:var(--bad);border-color:var(--bad)}
+  pre.json{background:#0a0d12;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;max-height:380px;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre;margin:6px 0}
+  details summary{cursor:pointer;color:var(--acc);font-size:12px;margin:6px 0}
+  .err{color:var(--bad);font-size:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin:6px 0}
+  .acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+  .acts .act{font-size:10px;display:inline-flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 6px 1px 2px}
+  .acts .act .cat{font-size:8px;padding:0 4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid2>div{min-width:0}   /* let columns shrink so a long-line <pre> scrolls (overflow:auto) instead of blowing past the card */
+  @media(max-width:860px){ .grid2{grid-template-columns:1fr} }
+  /* price calculator */
+  .cgroup{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px}
+  .cgroup>.gh{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--acc);margin-bottom:7px}
+  .crow{display:flex;align-items:center;gap:11px;margin:8px 0;transition:opacity .15s}
+  .crow .cl{flex:0 0 105px;font-size:12px;color:var(--fg)}
+  .crow input[type=range]{flex:1;accent-color:var(--acc);height:4px}
+  .crow .cv{flex:0 0 56px;text-align:right;font-size:13px;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums}
+  .cswitch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--fg)}
+  .cswitch input{appearance:none;-webkit-appearance:none;width:34px;height:18px;border-radius:10px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+  .cswitch input:checked{background:var(--acc)}
+  .cswitch input::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .15s}
+  .cswitch input:checked::after{left:18px}
+  .calc-result{background:linear-gradient(180deg,#11202b,#0f1620);border:1px solid var(--line);border-radius:12px;padding:16px 18px;align-self:start}
+  .calc-hero{text-align:center;padding:4px 0 13px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .calc-hero .lbl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em}
+  .calc-hero .amt{font-size:36px;font-weight:800;color:var(--good);line-height:1.05;margin-top:3px}
+  .calc-hero .sub{font-size:11px;color:var(--dim);margin-top:6px}
+  .receipt{font-size:13px}
+  .rline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0}
+  .rline .rl small{color:var(--dim);font-size:10px}
+  .rline .rv{font-variant-numeric:tabular-nums;font-weight:600}
+  .rline.minor .rl,.rline.minor .rv{color:var(--dim);font-weight:500}
+  .rline.add .rv{color:var(--good)} .rline.sub .rv{color:var(--warn)}
+  .rsep{border-top:1px dashed var(--line);margin:6px 0}
+  .rcap{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--acc);margin-bottom:5px}
+  .rcap small{color:var(--dim);font-weight:400;text-transform:none;letter-spacing:0}
+  .rtotal{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid var(--acc);margin-top:7px;padding-top:8px;font-size:15px;font-weight:800}
+  .rtotal .rv{color:var(--good);font-variant-numeric:tabular-nums}
+  .rfoot{margin-top:11px;padding-top:9px;border-top:1px solid var(--line);font-size:11px;color:var(--dim);text-align:center}
+  .rfoot.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Itinerary Lifecycles — reference</h1>
+  <span class="sp"></span>
+  <span class="why" id="meta"></span>
+  <a class="hbtn" href="itny.html">▶ Open simulator</a>
+</header>
+<div class="wrap">
+  <p class="lead">A living reference for the <b>itny.js</b> domain model: the three lifecycles (<b>itinerary</b>, <b>pending changes</b>, <b>item</b>), which actions are available at each step and <b>why</b>, plus the commercial supplier status model and sample data. Every table, matrix and JSON block below is <b>generated live</b> by driving the real aggregate — so it can't drift from the rules.</p>
+  <nav class="toc">
+    <a href="#scope">Scope</a><a href="#flow">Booking flow</a><a href="#itn">Itinerary lifecycle</a><a href="#brochure">Brochure</a><a href="#chg">Pending changes</a>
+    <a href="#scope2">Staged edits</a><a href="#item">Item lifecycle &amp; supplier status</a>
+    <a href="#pricecalc">Price calculator</a><a href="#holds">Holds</a><a href="#voucher">Vouchers</a><a href="#payment">Payments</a><a href="#promo">Promotions</a><a href="#cat">Action catalogue</a><a href="#views">Views catalogue</a><a href="#json">JSON examples</a>
+  </nav>
+  <div id="app"></div>
+</div>
+
+<script src="itny.js"></script>
+<script>
+const CFG = ITNY.CONFIG;
+const L = CFG.lifecycles;          // <-- single source of truth (lives in itny.js)
+const esc = s => String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const escA = s => esc(s).replace(/"/g,'&quot;');
+// A verdict's full checklist as a multi-line tooltip string: the headline, then every gate + rule check
+// (✓ ok / ✓* gated / ✗ blocking) — so a cell explains WHY it is ✓/✓*/· , not just the first blocker.
+// Browsers render the embedded newlines in a title="" tooltip; escA leaves them intact.
+function checksTip(r){
+  const head = (r.ok?'✓ ':(r.gated?'✓* (conditional) ':'✗ ')) + (r.why||'');
+  if(!r.checks || r.checks.length<2) return head;
+  const lines = r.checks.map(c=>(c.ok?'  ✓ ':(c.gated?'  ✓* ':'  ✗ ')) + (c.label?c.label+': ':'') + c.why);
+  return head + (r.ok?'':'   (total ✗ — at least one check failed)') + '\n' + lines.join('\n');
+}
+const mark = ok => ok ? '<span class="yes">✓</span>' : '<span class="nob">·</span>';
+
+/* ---- render helpers driven by itny.js metadata (no hardcoded lifecycle data here) ---- */
+function notesHTML(notes){ return (notes||[]).map(n=>`<div class="branch"><div class="bh">${n.h}</div><div class="bs">${n.body}</div></div>`).join(''); }
+function legendStd(){ return `<span><span class="yes">✓</span> available now</span>`
+  +`<span><span class="cond">✓*</span> available at this step once a runtime condition is met (hover for it)</span>`
+  +`<span><span class="nob">·</span> not at this step</span>`; }
+
+/* ---------- scenario builders (drive the real aggregate to canonical states) ---------- */
+async function validateAll(itn){ for(const u of itn.activeUnits().slice()){ itn.select(u.id); await itn.itemValidatePriceExec(u,{}); } if(itn.inChange()) await itn.pendingChangesApplyExec(undefined,{}); itn.select(null); }
+
+async function itnAt(status){
+  const itn = Itinerary.create();
+  if(status==='DRAFT') return itn;
+  await validateAll(itn); await itn.itnyPrepareExec();           if(status==='PREPARED') return itn;
+  await itn.itnyQuoteExec(); await itn.itnyToQuotedExec();       if(status==='QUOTED') return itn;
+  if(status==='LOST'){ await itn.itnyMarkLostExec(undefined,{reason:'Agent radio silence'}); return itn; }
+  if(status==='SUPERSEDED'){ await itn.itnyMarkSupersededExec(); return itn; }
+  await itn.itnyAcceptExec();                                    if(status==='APPROVED') return itn;
+  await itn.itnyInvoiceExec(); await itn.itnyToInvoicedExec();   if(status==='INVOICED') return itn;
+  itn.setCurrentUser('Fiona (Finance)'); await itn.itnyPayExec(undefined,{amount:itn.depositAmt()}); itn.setCurrentUser('Sam (Sales)'); await itn.itnySendVouchersExec(); if(status==='VOUCHERED') return itn;
+  for(const v of itn.liveVouchers().slice()){ await itn.voucherConfirmExec(undefined,{voucherId:v.id,bookingId:'BK-'+v.supplierId}); }
+  itn.select(null); await itn.itnyConfirmExec();                 if(status==='CONFIRMED') return itn;
+  await itn.itnyCancelExec(); await itn.pendingChangesApplyExec(undefined,{issueCreditNote:true}); return itn; // CANCELLED
+}
+
+async function changeAt(key){
+  const itn = Itinerary.create(); await itn.happyPath();         // CONFIRMED
+  if(key==='CANCELLATION'){ await itn.itnyCancelExec(); return itn; }
+  await itn.pendingChangesOpenExec(undefined,{initiator:'SELLER'});
+  const s = itn.items.find(x=>x.type==='ACCOMMODATION'); itn.select(s.id);
+  await itn.itemManagePriceExec(s,{price:s.sellPrice+500});
+  if(key==='DRAFT'){ itn.select(null); return itn; }
+  await itn.pendingChangesPrepareExec();                         if(key==='PREPARED') return itn;
+  await itn.pendingChangesQuoteExec();                           if(key==='QUOTED') return itn;
+  await itn.pendingChangesApproveExec();                         if(key==='APPROVED') return itn;
+  await itn.pendingChangesInvoiceExec();                         return itn; // INVOICED (Apply folds voucher generation)
+}
+
+// A PreBookingModif — a change auto-opened by the first edit in a DRAFT (pre-VOUCHERED) itinerary. Apply/Cancel only.
+async function preBookingAt(){
+  const itn = Itinerary.create();
+  const s = itn.items.find(x=>x.type==='ACCOMMODATION'); itn.select(s.id);
+  await itn.itemManagePriceExec(s,{price:s.sellPrice+100});   // first edit auto-opens a PreBookingModif draft change
+  itn.select(null);
+  return itn;
+}
+
+// Canonical builder per matrix column (key) = a reachable item STATUS × SUPPLIER STATUS permutation. Status is seller
+// intent; supplier status is the supplier/voucher dimension. Together they are the full per-line lifecycle.
+async function itemAt(key){
+  const acc = (i)=>i.items.find(x=>x.type==='ACCOMMODATION');
+  if(key==='NEW'){                       // NEW · NeedsRequest — nothing out
+    const itn = Itinerary.create(); const s = acc(itn); itn.select(s.id); return {itn, sid:s.id};
+  }
+  if(key==='CONF_NEEDS'){                // CONFIRMED · NeedsRequest — intent set, no supplier voucher yet
+    const itn = Itinerary.create(); const s = acc(itn); itn.select(s.id);
+    await itn.itemMarkAwaitingExec(s,{}); await itn.pendingChangesApplyExec(undefined,{});
+    return {itn, sid:s.id};
+  }
+  // the remaining states start from a real supplier voucher (itinerary at VOUCHERED → live AWAITING request)
+  const itn = await itnAt('VOUCHERED'); const s = acc(itn);
+  if(key==='CONF_AWAIT')   return {itn, sid:s.id};                                                                           // CONFIRMED · AwaitingSupplier — request AWAITING
+  if(key==='CONF_BOOKED'){ await itn.voucherConfirmExec(undefined,{voucherId:itn.liveVoucherFor(s.supplierId).id,bookingId:'BK-A'}); return {itn, sid:s.id}; }   // CONFIRMED · Booked
+  if(key==='CONF_REJ'){     await itn.voucherRejectExec(undefined,{voucherId:itn.liveVoucherFor(s.supplierId).id,comment:'no space'}); return {itn, sid:s.id}; }  // CONFIRMED · Rejected
+  // CANCELLED states: AWAIT = cancel-ask still out (awaiting the supplier); TERM = supplier acked the cancellation →
+  // confirmed recorded → a confirmed cancellation is terminal. Both confirm the booking first so the cancel is engaged.
+  await itn.voucherConfirmExec(undefined,{voucherId:itn.liveVoucherFor(s.supplierId).id,bookingId:'BK-A'});
+  await itn.pendingChangesOpenExec(undefined,{initiator:'SELLER'}); itn.select(s.id);
+  await itn.itemCancelExec(s,{fee:0,refund:0});
+  await itn.pendingChangesApplyExec(undefined,{confirmVouchers:true});             // cancel-ask voucher raised
+  if(key==='CANC_AWAIT') return {itn, sid:s.id};                                   // leave the cancel-ask AWAITING
+  const cv = itn.liveVoucherFor(s.supplierId); if(cv) await itn.voucherConfirmExec(undefined,{voucherId:cv.id});   // supplier acks → confirmed cancellation
+  return {itn, sid:s.id};                                                          // CANC_TERM — confirmed cancellation, terminal
+}
+
+/* ---------- generic matrix renderer ----------
+   instById[col] = actions in the CANONICAL state at that step. Each cell reads ONE
+   isAllowed() verdict: ok → ✓; gated (right step, blocked only by a satisfiable
+   runtime condition — the aggregate says so itself) → ✓*; else · . */
+function matrix(rowActs, cols, instById){
+  const head = `<tr><th class="rh">action</th><th class="pc">precondition (why)</th>`+
+    cols.map(c=>`<th>${esc(c.label)}${c.subHtml?`<span class="sub">${c.subHtml}</span>`:c.sub?`<span class="sub">${esc(c.sub)}</span>`:''}</th>`).join('')+`</tr>`;
+  const body = rowActs.map(a=>{
+    const cells = cols.map(c=>{
+      const m = instById[c.key]; const d = m ? m.find(x=>x.id===a.id) : null;
+      if(!d) return `<td>—</td>`;
+      const r = d.isAllowed();
+      if(r.ok) return `<td title="${escA(checksTip(r))}"><span class="yes">✓</span></td>`;
+      if(r.gated) return `<td title="${escA(checksTip(r))}"><span class="cond">✓*</span></td>`;
+      return `<td title="${escA(checksTip(r))}"><span class="nob">·</span></td>`;
+    }).join('');
+    const checks = a.checks&&a.checks.length?`<ol class="checklist">${a.checks.map(c=>`<li>${esc(c.description)}</li>`).join('')}</ol>`:'';
+    return `<tr><td class="rh"><b>${esc(a.description)}</b> <span class="rid">${esc(a.ruleId||'')}</span></td><td class="pc">${esc(a.preconditions||'')}${checks}</td>${cells}</tr>`;
+  }).join('');
+  return `<div class="scroll"><table class="mx">${head}${body}</table></div>`;
+}
+
+/* ---------- sections ---------- */
+function flow(steps){
+  return `<div class="flow">`+steps.map((s,i)=>{
+    const box = `<div class="fbox ${s.cls||''}"><b>${esc(s.name)}</b>${s.sub?`<span>${esc(s.sub)}</span>`:''}</div>`;
+    const arr = i<steps.length-1 ? `<div class="farr">→${s.on?`<small>${esc(s.on)}</small>`:''}</div>` : '';
+    return box+arr;
+  }).join('')+`</div>`;
+}
+// A coloured destination-state pill for the transition map: terminals red, a back-to-DRAFT blue, a forward step green.
+function transPill(state,kind){
+  const term=/CANCELLED|LOST|SUPERSEDED/.test(state);
+  const cls=term?'rec-NeedsDecision':(kind==='back'?'rec-NeedsRequest':'rec-Booked');
+  return `<span class="pill ${cls}">${esc(state)}</span>`;
+}
+// The full state-transition map (every edge: forward ladder, back-edges, and the routes into each terminal).
+function transitionsTable(list){
+  return `<div class="scroll"><table>
+    <tr><th>From state(s)</th><th>Trigger / action</th><th>Precondition</th><th>To</th></tr>
+    ${list.map(t=>`<tr><td>${esc(t.from)}</td><td>${esc(t.via)}</td><td><span class="hint">${esc(t.pre||'—')}</span></td><td>${transPill(t.to,t.kind)}</td></tr>`).join('')}
+  </table></div>`;
+}
+
+async function sectionItinerary(){
+  const M = L.itinerary;
+  const cols = M.ladder.map(s=>({key:s.key,label:s.key,sub:s.sub}))
+    .concat(M.terminal.map(s=>({key:s.key,label:s.key,sub:s.sub})));
+  const instById = {};
+  for(const c of cols) instById[c.key] = (await itnAt(c.key)).getActions().filter(a=>a.category==='itny');
+  const rowActs = instById.DRAFT;   // descriptors (name/ruleId/precondition) come from any built instance
+  const dia = flow(M.ladder.map((s,i)=>({name:s.key,sub:s.sub,cls:i===0?'start':'',on:s.next})));
+  const term = `<div class="flow"><div class="farr">terminal ↘</div>`+
+    M.terminal.map(s=>`<div class="fbox term"><b>${esc(s.key)}</b><span>${esc(s.sub)}</span></div>`).join('<div class="farr">·</div>')+`</div>`;
+  return `<section id="itn"><h2><span class="n">1</span> Itinerary lifecycle</h2>
+    <p class="lead">${M.lead}</p>
+    ${dia}
+    ${term}
+    <h3>Every state transition</h3>
+    <div class="legend"><span><span class="pill rec-Booked">forward</span> ladder step</span><span><span class="pill rec-NeedsRequest">→ DRAFT</span> revert / reopen</span><span><span class="pill rec-NeedsDecision">terminal</span> LOST / SUPERSEDED / CANCELLED</span></div>
+    ${transitionsTable(M.transitions||[])}
+    <div class="branchrow">${notesHTML(M.notes)}</div>
+    <h3>Which itinerary action at which status — and why</h3>
+    <div class="legend">${legendStd()}</div>
+    <p class="why">Hover any cell for the live reason. The <b>precondition</b> column is the rule. The last three columns are the terminal states (LOST/SUPERSEDED re-openable, CANCELLED final).</p>
+    ${matrix(rowActs, cols, instById)}
+  </section>`;
+}
+
+async function sectionBrochure(){
+  const M = L.brochure;
+  const dia = flow([
+    ...M.ladder.map((s,i)=>({name:s.key,sub:s.sub,cls:i===0?'start':'',on:s.next})),
+    {name:M.exit.key,sub:M.exit.sub,cls:'start'}
+  ]);
+  return `<section id="brochure"><h2><span class="n">1b</span> Brochure lifecycle</h2>
+    <p class="lead">${M.lead}</p>
+    ${dia}
+    <h3>Allowed actions</h3>
+    <div class="legend">${(M.allowed||[]).map(a=>`<span><span class="cat cat-itny">${esc(a)}</span></span>`).join('')}</div>
+    <div class="branchrow">${notesHTML(M.notes)}</div>
+  </section>`;
+}
+
+async function sectionChange(){
+  const M = L.change;
+  const pc = a=>a.category==='pendingChanges';
+  // --- PostBookingModif: the full amendment cycle (DRAFT → … → INVOICED) ---
+  const postKeys = M.ladder.map(s=>s.key);
+  const postInst = {};
+  for(const k of postKeys) postInst[k] = (await changeAt(k)).getActions().filter(pc);
+  const rowActs = postInst.DRAFT;                                   // descriptors (name/ruleId/precondition) — same action set for all 3
+  // --- PreBookingModif: a pre-VOUCHERED draft change (Apply/Cancel only) ---
+  const preInst = { PRE: (await preBookingAt()).getActions().filter(pc) };
+  const dia = flow([
+    {name:M.entry.key,sub:M.entry.sub,cls:'start',on:M.entry.next},
+    ...M.ladder.map(s=>({name:s.key,sub:s.sub,on:s.next})),
+    {name:M.exit.key,sub:M.exit.sub,cls:'start'}
+  ]);
+  return `<section id="chg"><h2><span class="n">2</span> Pending-changes lifecycle</h2>
+    <p class="lead">${M.lead}</p>
+    ${dia}
+    <div class="branchrow">${notesHTML(M.notes)}</div>
+    <h3>Which change action at which change-status — and why</h3>
+    <div class="legend">${legendStd()}</div>
+    <p class="why">A change runs one of <b>two</b> lifecycles, fixed by its <b>type</b> at open. A <b>PreBookingModif</b> (pre-VOUCHERED draft change) is <b>Apply / Cancel only</b> — no quote cycle. A <b>PostBookingModif</b> (VOUCHERED+) runs the full Prepare → Quote → Approve → Invoice → Apply cycle. An <b>itinerary cancellation</b> is just a PostBookingModif with every item staged CANCEL (identical actions and cycle, plus a direct Apply at any step), so it isn't shown separately. Columns are the change's own status (the itinerary stays CONFIRMED/INVOICED underneath).</p>
+    <h3 style="text-transform:none;color:var(--pend)">1 · PreBookingModif lifecycle <span class="why" style="text-transform:none">— a pre-VOUCHERED draft change (Apply / Cancel only)</span></h3>
+    ${matrix(rowActs, [{key:'PRE',label:'DRAFT',sub:'pre-booking'}], preInst)}
+    <h3 style="text-transform:none;color:var(--pend)">2 · PostBookingModif lifecycle <span class="why" style="text-transform:none">— the full amendment cycle (VOUCHERED+; an itinerary cancellation runs this too, all items CANCEL)</span></h3>
+    ${matrix(rowActs, postKeys.map(k=>({key:k,label:k,sub:'amend'})), postInst)}
+  </section>`;
+}
+
+function sectionScope(){
+  const M = L.scope;
+  return `<section id="scope2"><h2><span class="n">2b</span> Every edit is staged — draft change vs amendment</h2>
+    <p class="lead">${M.lead}</p>
+    <div class="scroll"><table>
+      <tr><th>Edit</th><th>DRAFT — draft change (Apply/Cancel)</th><th>VOUCHERED+ — amendment change</th><th>Rule</th></tr>
+      ${M.rows.map(r=>`<tr><td><b>${r.edit}</b></td><td>${r.inline}</td><td>${r.staged}</td><td class="rid">${r.rule}</td></tr>`).join('')}
+    </table></div>
+  </section>`;
+}
+
+async function sectionItem(){
+  const M = L.item;
+  const R = L.supplierStatus;
+  // columns = the 8 reachable STATUS × SUPPLIER STATUS permutations; header shows the status + a coloured supplier status pill
+  const cols = M.matrixCols.map(c=>({ key:c.key, label:c.label, subHtml:`<span class="pill rec-${c.rec}">⇄ ${esc(c.rec)}</span><br>${esc(c.sub)}` }));
+  const instById = {};
+  for(const c of M.matrixCols){ const {itn,sid} = await itemAt(c.key); itn.select(sid); instById[c.key] = itn.getActions().filter(a=>a.category==='item' && a.group!=='hold'); }
+  const rowActs = instById.NEW;
+  const dia = flow(M.ladder.map((s,i)=>({name:s.key,sub:s.sub,cls:i===0?'start':'',on:s.next})));
+  // CANCELLED terminal branch, rendered to the side of the NEW→CONFIRMED spine (same shape as the payment ladder).
+  const term = (M.terminal&&M.terminal.length) ? `<div class="flow"><div class="farr">on cancel ↘</div>`+
+    M.terminal.map(s=>`<div class="fbox term"><b>${esc(s.key)}</b><span>${esc(s.sub)}</span></div>`).join('<div class="farr">·</div>')+`</div>` : '';
+  // ---- supplier status derivation table (merged in from the former standalone section) ----
+  const base = ()=>{ const itn=Itinerary.create(); return itn._newItem({id:'X',type:'ACTIVITY',supplierId:'C',systemPrice:100,hypothetical:false,paxIds:[]}); };
+  const rr=[]; let u;
+  u=base(); rr.push(['just added (NEW)','$100','—','—',u.supplierStatus]);
+  u=base(); u.requested={fp:u.fingerprint(),price:100,ver:1,state:'AWAITING'}; rr.push(['voucher sent','$100','$100 · AWAITING','—',u.supplierStatus]);
+  u=base(); u.confirmed={fp:u.fingerprint(),price:100,ver:1}; rr.push(['supplier confirmed','$100','—','$100',u.supplierStatus]);
+  u=base(); var f=u.fingerprint(); u.systemPrice=200; u.confirmed={fp:f,price:100,ver:1}; rr.push(['amended, not re-requested','$200','—','$100 (old)',u.supplierStatus]);
+  u=base(); f=u.fingerprint(); u.systemPrice=200; u.confirmed={fp:f,price:100,ver:1}; u.requested={fp:u.fingerprint(),price:200,ver:2,state:'AWAITING'}; rr.push(['amended &amp; re-requested','$200','$200 · AWAITING','$100 (old)',u.supplierStatus]);
+  u=base(); f=u.fingerprint(); u.systemPrice=200; u.confirmed={fp:f,price:100,ver:1}; u.requested={fp:u.fingerprint(),price:200,ver:2,state:'REJECTED'}; rr.push(['amendment rejected','$200','$200 · REJECTED','$100 (old)',u.supplierStatus]);
+  u=base(); u.systemPrice=200; u.confirmed={fp:u.fingerprint(),price:200,ver:2}; rr.push(['amendment confirmed','$200','—','$200',u.supplierStatus]);
+  u=base(); u.requested={fp:u.fingerprint(),price:100,ver:1,state:'REJECTED'}; rr.push(['initial request refused','$100','$100 · REJECTED','—',u.supplierStatus]);
+  u=base(); u.requested={fp:'STALE',price:100,ver:1,state:'AWAITING'}; u.systemPrice=150; rr.push(['request out, spec moved','$150','$100 · AWAITING (stale)','—',u.supplierStatus]);
+  const rbody = rr.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><span class="pill rec-${r[4]}">${r[4]}</span></td></tr>`).join('');
+  return `<section id="item"><h2><span class="n">3</span> Item lifecycle — status × supplier status</h2>
+    <p class="lead">${M.lead}</p>
+    ${dia}
+    ${term}
+    <div class="branchrow">${notesHTML(M.notes)}</div>
+    <h3>The full per-line lifecycle — which action at which status × supplier status</h3>
+    <p class="why">A line's <b>status</b> is seller intent; its <b>supplier status</b> is the supplier/voucher dimension. Together they form the full lifecycle — e.g. <code>NEW</code> → <code>CONFIRMED · NeedsRequest</code> (intent, no voucher) → <code>CONFIRMED · AwaitingSupplier</code> (voucher out) → <code>CONFIRMED · Booked</code> (confirmed), with a <code>Rejected</code> branch and the cancellation states alongside. Each column below is a reachable permutation; hover any cell for the live reason. A <code>CANCELLED</code> line is <b>terminal</b> — confirming the cancellation records <code>confirmed</code>, so it stays engaged and offers no further actions (a confirmed cancellation is final). An amended <code>Booked</code> line also carries the derived <b>UPDATED</b> label (where <b>Revert amendment</b> lives). Hold actions are a separate group. The only <b>✓*</b> here is the OPS-role gate on <b>Toggle OPS_READY</b> (available in the <code>CONFIRMED · Booked</code> column once an <b>Ops</b> user is operating); every other item verdict is a definite yes/no.</p>
+    <div class="legend">${Object.entries(R.states).map(([k,v])=>`<span><span class="pill rec-${k}">${k}</span> ${v}</span>`).join('')}</div>
+    ${matrix(rowActs, cols, instById)}
+    <h3>How supplier status is derived — target / requested / confirmed</h3>
+    <p class="lead">${R.lead}</p>
+    <div class="scroll"><table>
+      <tr><th>situation</th><th>target</th><th>requested</th><th>confirmed</th><th>→ supplier status</th></tr>${rbody}
+    </table></div>
+    <p class="why">${R.derivation}</p>
+    <div class="note">${R.visibility}</div>
+  </section>`;
+}
+
+async function sectionHolds(){
+  const itn = Itinerary.create(); const s = itn.items.find(x=>x.type==='ACCOMMODATION'); itn.select(s.id);
+  await itn.itemRequestHoldExec(s,{expiresAt:'D5'});
+  const heldV = itn.projection().items.find(i=>i.id===s.id);
+  await itn.itemManagePriceExec(s,{price:s.sellPrice+100});
+  const driftV = itn.projection().items.find(i=>i.id===s.id);
+  const row = (lbl,v)=>`<tr><td>${lbl}</td><td><span class="pill">${v.status}</span></td><td>${v.holds.map(h=>`<code>${h.status}${h.expired?'·exp':''} $${h.price}</code>`).join(' ')||'—'}</td><td>${v.holdMismatch?'<span class="pill rec-AwaitingSupplier">true</span>':'false'}</td></tr>`;
+  return `<section id="holds"><h2><span class="n">3b</span> Holds (a record, not a status)</h2>
+    <p class="lead">${L.holds.lead}</p>
+    <div class="scroll"><table>
+      <tr><th>after…</th><th>item status</th><th>holds</th><th>holdMismatch</th></tr>
+      ${row('Add Hold', heldV)}
+      ${row('Price changed +$100', driftV)}
+    </table></div>
+    <p class="why">${L.holds.note}</p>
+  </section>`;
+}
+
+async function sectionVoucher(){
+  const M = L.voucher;
+  // drive a fresh itinerary to VOUCHERED to show real per-supplier vouchers (lines + payment terms)
+  const itn = Itinerary.create();
+  for(const u of itn.activeUnits().slice()){ itn.select(u.id); if(itn.itemValidatePriceEnabled(u).ok) await itn.itemValidatePriceExec(u,{}); }
+  await itn.itnyPrepareExec(); await itn.itnyQuoteExec(); await itn.itnyToQuotedExec(); await itn.itnyAcceptExec(); await itn.itnyInvoiceExec(); await itn.itnyToInvoicedExec();
+  itn.setCurrentUser('Fiona (Finance)'); await itn.itnyPayExec(undefined,{amount:itn.depositAmt()}); itn.setCurrentUser('Sam (Sales)'); await itn.itnySendVouchersExec();
+  // confirm one supplier (gives a booking + payment terms), leave the rest SENT
+  const first = itn.liveVouchers()[0]; if(first) await itn.voucherConfirmExec(undefined,{voucherId:first.id,bookingId:'BK-'+first.supplierId});
+  const rows = itn.voucherView().map(v=>`<tr>
+      <td><code>${v.id}</code> v${v.ver}</td><td>${esc(v.supplierName)}${v.bookingId?' <span class="rid">'+esc(v.bookingId)+'</span>':''}</td>
+      <td><span class="pill">${v.status}</span></td>
+      <td>${v.lines.map(l=>`<code>${l.itemId}:${l.action}:${l.state}</code>`).join(' ')||'—'}</td>
+      <td>${v.terms&&v.terms.entries.length?('due '+v.terms.minDueToken+' · $'+v.terms.totalOutstanding+' out · $'+v.terms.depositTotal+' dep'):'—'}</td></tr>`).join('');
+  return `<section id="voucher"><h2><span class="n">3c</span> Vouchers (per-supplier, all-or-nothing)</h2>
+    <p class="lead">${M.lead}</p>
+    <div class="legend">${M.ladder.map(s=>`<span><span class="pill">${s.key}</span> ${s.sub}</span>`).join('')}${M.terminal.map(s=>`<span><span class="pill rec-NeedsDecision">${s.key}</span> ${s.sub}</span>`).join('')}</div>
+    <div class="scroll"><table>
+      <tr><th>voucher</th><th>supplier</th><th>status</th><th>lines (item:action:state)</th><th>payment terms</th></tr>${rows}
+    </table></div>
+    ${M.notes.map(n=>`<div class="note"><b>${n.h}</b> — ${n.body}</div>`).join('')}
+  </section>`;
+}
+
+async function sectionPayment(){
+  const M = L.payment;
+  // colour the derived status pill by reusing existing supplier status classes
+  const payClass = s => /FULLY_PAID/.test(s) ? 'rec-Booked'
+    : /CANCELLED/.test(s) ? 'rec-Rejected'
+    : /NEEDS_PAYMENT|OVERPAID/.test(s) ? 'rec-AwaitingSupplier' : '';
+  const dia = flow(M.ladder.map((s,i)=>({name:s.key,sub:s.sub,cls:i===0?'start':'',on:s.next})));
+  const term = `<div class="flow"><div class="farr">on cancel ↘</div>`+
+    M.terminal.map(s=>`<div class="fbox term"><b>${esc(s.key)}</b><span>${esc(s.sub)}</span></div>`).join('<div class="farr">·</div>')+`</div>`;
+  // live: walk the itinerary spine (+ a cancellation) and read the DERIVED paymentStatus + money read-models at each step
+  const spine = L.itinerary.ladder.map(s=>s.key).concat(['CANCELLED']);
+  const rows = [];
+  for(const st of spine){
+    const itn = await itnAt(st);
+    rows.push(`<tr><td><span class="pill">${esc(st)}</span></td><td><span class="pill ${payClass(itn.paymentStatus)}">${esc(itn.paymentStatus)}</span></td>
+      <td>$${itn.total()}</td><td>$${itn.depositAmt()}</td><td>$${itn.paid()}</td><td>$${itn.due()}</td></tr>`);
+  }
+  // payment + credit-note actions across the itinerary ladder — when each lights up and why
+  const payActs = ['pay','depositEdit','milestoneAdd','creditNoteAdd','creditNoteTransfer'];
+  const acols = L.itinerary.ladder.map(s=>({key:s.key,label:s.key,sub:s.sub}));
+  const instById = {};
+  for(const c of acols) instById[c.key] = (await itnAt(c.key)).getActions().filter(a=>payActs.includes(a.id));
+  const rowActs = Itinerary.create().getActions().filter(a=>payActs.includes(a.id));
+  return `<section id="payment"><h2><span class="n">3d</span> Payment lifecycle (derived status)</h2>
+    <p class="lead">${M.lead}</p>
+    ${dia}
+    ${term}
+    <div class="branchrow">${notesHTML(M.notes)}</div>
+    <h3>How payment status &amp; money track the itinerary spine</h3>
+    <p class="why">Driven live: each itinerary status built to canonical, showing the <b>derived</b> <code>paymentStatus</code> and the money read-models (<code>total</code> / <code>deposit</code> / <code>paid</code> / <code>due</code>). Nothing is collectable before <code>INVOICED</code>; the happy path collects the deposit before <b>Send Vouchers</b> then the balance; <code>CANCELLED</code> here issues a credit note.</p>
+    <div class="scroll"><table>
+      <tr><th>itinerary status</th><th>payment status</th><th>total</th><th>deposit</th><th>paid</th><th>due</th></tr>
+      ${rows.join('')}
+    </table></div>
+    <h3>Which payment action at which status — and why</h3>
+    <div class="legend">${legendStd()}</div>
+    <p class="why">The money-recording actions across the spine. <b>Record payment</b> needs an invoice and an unpaid balance; <b>Edit deposit</b> &amp; <b>Add milestone</b> shape the schedule; credit notes (in/out) post to <code>payments[]</code> and recompute the status. <b>Record payment</b>, <b>Record refund</b> and both credit notes are <b>Finance-only</b>, so they render <b>✓*</b> until a Finance user is operating (hover a cell for the role) — a <code>·</code> still means the step itself blocks the action.</p>
+    ${matrix(rowActs, acols, instById)}
+  </section>`;
+}
+
+async function sectionJson(){
+  // item with holds + commercial triple (after a drift)
+  const a = Itinerary.create(); const s = a.items.find(x=>x.type==='ACCOMMODATION'); a.select(s.id);
+  await a.itemRequestHoldExec(s,{expiresAt:'D5'}); await a.itemManagePriceExec(s,{price:s.sellPrice+100});
+  const itemView = a.projection().items.find(i=>i.id===s.id);
+  // mid-change: open + stage a price modify, show the edit-list + summary
+  const b = Itinerary.create(); await b.happyPath();
+  const bs = b.items.find(x=>x.type==='ACCOMMODATION'); b.select(bs.id);
+  await b.pendingChangesOpenExec(undefined,{initiator:'CLIENT_REQUEST'});
+  await b.itemManagePriceExec(bs,{price:bs.sellPrice+500});
+  const editList = {trigger:b.changeSet.trigger, status:b.pendingStatus, edits:b.changeEdits()};
+  const summary = b.summary();
+  const dbFresh = Itinerary.create().dbDocument();
+  const blk = (o)=>`<pre class="json">${esc(JSON.stringify(o,null,2))}</pre>`;
+  return `<section id="json"><h2><span class="n">5</span> Data — JSON examples</h2>
+    <p class="lead">Real output from the read-models (recomputed, never stored as such). The persisted truth is a pristine <b>baseline</b> + the active <b>change-set edit-list</b> + a derived <b>summary</b>; the full projection is recomputed.</p>
+    <div class="grid2">
+      <div><h3>Item projection — holds + commercial triple</h3>
+        <p class="why">A held line whose price then drifted: derived <code>status:NEW</code>, <code>holdMismatch:true</code>, the <code>commercial</code> triple, and per-hold <code>status</code>.</p>${blk(itemView)}</div>
+      <div><h3>Itinerary summary (read-model)</h3>
+        <p class="why">Totals (committed vs projected), pending-change status, the per-line supplier status rollup, and resolution flags.</p>${blk(summary)}</div>
+    </div>
+    <h3>Active change-set — edit-list</h3>
+    <p class="why">A client-requested price MODIFY staged on a CONFIRMED line: before/after spec and the line's lifecycle snapshot.</p>${blk(editList)}
+    <details><summary>Full DB document of a fresh DRAFT itinerary (baseline + summary)</summary>${blk(dbFresh)}</details>
+  </section>`;
+}
+
+function sectionCatalogue(){
+  const acts = Itinerary.create().getActions();
+  const groups = [['itny','Itinerary'],['pendingChanges','Pending changes'],['item','Item'],['voucher','Voucher'],['document','Documents']];
+  const blocks = groups.map(([cat,label])=>{
+    const rows = acts.filter(a=>a.category===cat).map(a=>`<tr>
+      <td><b>${esc(a.description)}</b><br><span class="rid">${esc(a.id)} · ${esc(a.ruleId||'')}</span></td>
+      <td>${esc(a.preconditions||'')}</td><td>${esc(a.outcome||'')}</td>
+      <td>${a.checks && a.checks.length ? `<ol class="checklist">${a.checks.map(c=>`<li>${esc(c.description)}</li>`).join('')}</ol>` : '—'}</td>
+      <td>${a.params && a.params.properties && Object.keys(a.params.properties).length ? Object.keys(a.params.properties).map(k=>`<code>${esc(k)}</code>`).join(' ') : '—'}</td>
+    </tr>`).join('');
+    return `<h3><span class="cat cat-${cat}">${cat}</span> ${label} (${acts.filter(a=>a.category===cat).length})</h3>
+      <div class="scroll"><table><tr><th>action</th><th>preconditions (why)</th><th>outcome</th><th>checks</th><th>params</th></tr>${rows}</table></div>`;
+  }).join('');
+  return `<section id="cat"><h2><span class="n">4</span> Full action catalogue</h2>
+    <p class="lead">Every action <code>getActions()</code> exposes, by category — the authoritative "what &amp; why". Each action is self-contained: <code>ruleId</code>, <code>description</code>, <code>preconditions</code>, <code>outcome</code>, <code>params</code> (schema), and the runnable <code>isAllowed()</code> / <code>execute(input)</code> whose <code>.code</code> is the readable JS — all defined inline in <code>ACTION_REGISTRY</code> in <code>itny.js</code>.</p>${blocks}</section>`;
+}
+
+// The CQRS query side — getViews() materialises the read-model catalogue with the same descriptor
+// shape as getActions(). Driven live: select a line so item-scope views resolve, then list by scope.
+function sectionViews(){
+  const itn = Itinerary.create(); if(itn.items[0]) itn.select(itn.items[0].id);
+  const views = itn.getViews();
+  const groups = [['itinerary','Itinerary'],['item','Item'],['pax','Pax'],['change','Change']];
+  const blocks = groups.map(([scope,label])=>{
+    const inScope = views.filter(v=>v.scope===scope);
+    if(!inScope.length) return '';
+    const rows = inScope.map(v=>`<tr>
+      <td><b>${esc(v.description)}</b><br><span class="rid">${esc(v.id)} · ${esc(v.ruleId||'')}</span></td>
+      <td>${esc(v.reads||'')}</td><td><code>${esc(v.returns)}</code></td>
+      <td>${v.params && v.params.properties && Object.keys(v.params.properties).length ? Object.keys(v.params.properties).map(k=>`<code>${esc(k)}</code>`).join(' ') : '—'}</td>
+    </tr>`).join('');
+    return `<h3><span class="cat cat-${scope}">${scope}</span> ${label} (${inScope.length})</h3>
+      <div class="scroll"><table><tr><th>view</th><th>reads (what)</th><th>returns</th><th>filters</th></tr>${rows}</table></div>`;
+  }).join('');
+  const blk = (o)=>`<pre class="json">${esc(JSON.stringify(o,null,2))}</pre>`;
+  return `<section id="views"><h2><span class="n">4b</span> Full view (query) catalogue</h2>
+    <p class="lead">The CQRS <b>query</b> side, mirroring the action catalogue above. <code>getViews()</code> materialises every read-model with the same descriptor shape as <code>getActions()</code> — <code>id</code>, <code>scope</code>, <code>description</code>, <code>params</code> (filters) and a runnable <code>run(input)</code> whose <code>.code</code> is the readable JS. Each query <b>delegates</b> to a read-model method on the aggregate, defined inline in <code>VIEW_REGISTRY</code> in <code>itny.js</code> — actions are the commands, these are the queries.</p>${blocks}
+    <h3>Live examples</h3>
+    <div class="grid2">
+      <div><h3>itnySummaryQuery()</h3>${blk(itn.itnySummaryQuery())}</div>
+      <div><h3>itemViewQuery() — selected line</h3>${blk(itn.itemViewQuery())}</div>
+    </div></section>`;
+}
+
+// Promotions & discounts — driven live: projected catalog match, a real selection scenario
+// (single-service GREEN + multi-service CIRCUIT + a manual discount), and the unmatched advisory.
+async function sectionPromotions(){
+  const blk = (o)=>`<pre class="json">${esc(JSON.stringify(o,null,2))}</pre>`;
+  // 1. catalog templates with PROJECTED match eval against the demo (fresh aggregate, nothing selected yet)
+  const c = Itinerary.create();
+  const cat = c.itnyPromotionsQuery().catalog;
+  const condTxt = (ev)=>(ev.conditions||[]).map(x=>`${esc(x.description)} <b style="color:${x.ok?'var(--good)':'var(--rec)'}">${x.ok?'✓':'✗'}</b>`).join(' · ');
+  const benTxt = (p)=>(p.actions||[]).map(a=>a.actionType==='AddOn'?esc(a.addOn||'add-on'):`${a.discount?a.discount.discountPercent:''}% off ${a.discount?(a.discount.targetType||'').toLowerCase():''}`).join(', ');
+  const catRows = cat.map(r=>`<tr>
+    <td><b>${esc(r.promo.name)}</b><br><span class="rid">${esc(r.promo.id)}</span></td>
+    <td><span class="cat cat-itny">${esc(r.promo.supplierId)}</span></td>
+    <td>${condTxt(r.eval)}</td>
+    <td>${benTxt(r.promo)}</td>
+    <td><span class="chip ${r.eval.matched?'rec-Booked':'rec-Rejected'}">${r.eval.matched?'can match':'no match'}</span></td>
+  </tr>`).join('');
+  // 2. selection scenario — GREEN on the lodge, multi-service CIRCUIT spanning both supplier-A camps, + a manual discount, then Apply.
+  const b = Itinerary.create();
+  const s5=b.items.find(x=>x.id==='S5'), s9=b.items.find(x=>x.id==='S9');
+  await b.pendingChangesOpenExec(undefined,{initiator:'SELLER'});
+  b.select(s5.id);
+  await b.itemSelectPromotionExec(s5,{templateId:'PROMO-GREEN'});
+  await b.itemSelectPromotionExec(s5,{templateId:'PROMO-CIRCUIT'});
+  const circ=b.promotions.find(p=>p.templateId==='PROMO-CIRCUIT');
+  await b.itemTogglePromoItemExec(s5,{promoId:circ.id,itemId:s9.id});
+  await b.itemAddDiscountExec(s5,{descr:'Loyalty',amount:5});
+  await b.pendingChangesApplyExec(undefined,{});
+  b.select(s5.id);
+  const applied = b.itemAppliedPromosQuery();
+  const perItem = b.itemPromotionsQuery();
+  // 3. unmatched advisory — select LONGSTAY (needs ≥7 nights) on a 3-night line; it stays selected but never matches.
+  const d = Itinerary.create();
+  const ds=d.items.find(x=>x.id==='S5');
+  await d.pendingChangesOpenExec(undefined,{initiator:'SELLER'});
+  d.select(ds.id);
+  await d.itemSelectPromotionExec(ds,{templateId:'PROMO-LONGSTAY'});
+  await d.pendingChangesApplyExec(undefined,{});
+  const unmatched = d.itnyUnmatchedPromotionsQuery();
+
+  return `<section id="promo"><h2><span class="n">3e</span> Promotions &amp; discounts</h2>
+    <p class="lead">A two-list model: a per-itinerary <b>catalog of TEMPLATES</b> (the available menu) and the <b>selected INSTANCES</b> chosen onto lines. An instance carries <b>conditions</b> (when it applies) and <b>actions</b> (the benefit). A single instance can span multiple lines (a circuit), so matching is instance-scoped. Promotions are always edited through a pending change, and the benefit is applied by a post-price pass; the figures below are <b>generated live</b> via the new query methods.</p>
+    <h3>Catalog templates — projected match against the demo</h3>
+    <p class="why">From <code>itnyPromotionsQuery().catalog</code>. The ✓/✗ per condition is the live evaluation. <b>Long Stay 7+</b> needs 7 nights but the demo lodge has 3 → it <b>can't match</b> until the stay grows — exactly the advisory you'd surface when a selected promo stops qualifying.</p>
+    <div class="scroll"><table><tr><th>template</th><th>supplier</th><th>conditions (live ✓/✗)</th><th>benefit</th><th>projected</th></tr>${catRows}</table></div>
+    <h3>A selection scenario — single, multi-service &amp; manual</h3>
+    <p class="why">Inside one change on <code>S5 Safari Lodge</code>: <b>Green Season</b> (single-service, matches), the <b>Same-Camp Circuit</b> (selected on S5, then <code>togglePromoItem</code> adds <code>S9 Riverside Camp</code> so the 2-lodge / 5-night condition is met — its 100%-off-cheapest-night benefit lands on the cheaper line, hence <code>amount:0</code> here / the value on S9), and a <b>manual</b> 5% loyalty discount (<code>isManual:true</code>, always applies). Output of <code>itemAppliedPromosQuery()</code> on the lodge:</p>
+    ${blk(applied)}
+    <h3>Per-item read-model — <code>itemPromotionsQuery()</code></h3>
+    <p class="why">What the item's Promotions tab renders: <code>selected</code> instances on this line, <code>supplierOther</code> instances of the same supplier to add to, the <code>catalog</code> templates available, and a <code>toggleState</code> colour hint (<code>${esc(perItem.toggleState)}</code>).</p>
+    <details><summary>itemPromotionsQuery() — full read-model (${perItem.selected.length} selected · ${perItem.catalog.length} catalog)</summary>${blk(perItem)}</details>
+    <h3>Unmatched advisory — <code>itnyUnmatchedPromotionsQuery()</code></h3>
+    <p class="why">A selected instance whose members no longer qualify (here <b>Long Stay 7+</b> on a 3-night line). It's <b>informational</b> — surfaced in the pending-changes panel, but it never blocks Apply.</p>
+    ${blk(unmatched)}
+  </section>`;
+}
+
+// End-to-end booking flow driven live on the real aggregate, annotated by the three parties (CLIENT / SELLER /
+// SUPPLIER), including two loops of changes — proves the hand-offs and the repeating amendment cycle.
+async function sectionBookingFlow(){
+  const PARTY = { CLIENT:'var(--acc)', SALES:'var(--good)', FINANCE:'var(--pend)', OPS:'var(--warn)', SUPPLIER:'var(--rec)' };
+  // The operator splits into the three role-gated users — SALES (SP) / FINANCE (FIN) / OPS (OPS). CLIENT & SUPPLIER
+  // actions are not role-gated and run as the default sales operator. step() switches the operating user per lane so
+  // role-gated actions (FIN records client money; OPS confirms lines + issues the FCA) execute as the right user —
+  // exactly as happyPath() does.
+  const USER = { CLIENT:'Sam (Sales)', SALES:'Sam (Sales)', FINANCE:'Fiona (Finance)', OPS:'Olivia (Ops)', SUPPLIER:'Sam (Sales)' };
+  const itn = Itinerary.create();
+  const acc = ()=>itn.items.find(x=>x.type==='ACCOMMODATION');
+  // id → {desc, cat}, harvested live from getActions() (with a line selected so item actions appear) — the chips under
+  // each step show the real action description prefixed by its category, never drifting from the registry. Tooltip = id.
+  // Document generators (quote/invoice/FCA) sit in the 'documents' group → badged "Document". One synthetic umbrella
+  // (editItemsPax) stands in for the long catalogue of in-change item/pax edits (price, qty, dates, pax, cancel, remove…).
+  const CATLBL = { itny:'Itny', item:'Item', pendingChanges:'Change', voucher:'Voucher', document:'Document' };
+  const meta = {}; { const m=Itinerary.create(); const it=m.items[0]; if(it) m.select(it.id); m.getActions().forEach(a=>{ meta[a.id]={ desc:a.description, cat: a.group==='documents' ? 'document' : a.category }; }); }
+  meta.editItemsPax = { desc:'Change items and/or pax', cat:'item' };
+  const seq = []; let phase='';
+  const setPhase = p => phase=p;
+  // acts = the getActions() ids invoked in this step (rendered as description chips, in order). opt flags an illustrative
+  // optional step. step() switches the operating user per lane so role-gated actions run as the right user.
+  const step = async (party, label, acts, fn, opt=false) => { itn.setCurrentUser(USER[party]); if(fn) await fn(); seq.push({ phase, party, label, acts: acts||[], opt, st:itn.status, pend:itn.pendingStatus, pay:itn.paymentStatus }); };
+  const confirmVouchers = async (bk) => { for(const v of itn.liveVouchers().slice()){ if(itn.voucherConfirmEnabled(undefined,{voucherId:v.id}).ok) await itn.voucherConfirmExec(undefined,{voucherId:v.id,bookingId:bk+'-'+v.supplierId}); } };
+  const rejectVouchers = async (comment) => { for(const v of itn.liveVouchers().slice()){ if(itn.voucherRejectEnabled(undefined,{voucherId:v.id}).ok) await itn.voucherRejectExec(undefined,{voucherId:v.id,comment}); } };
+
+  // ---- Booking ----
+  setPhase('Booking');
+  await step('SALES','Build & validate the itinerary', ['validate','cApply'], async()=>{ for(const u of itn.activeUnits().slice()){ itn.select(u.id); if(itn.itemValidatePriceEnabled(u).ok) await itn.itemValidatePriceExec(u,{}); } if(itn.inChange()) await itn.pendingChangesApplyExec(undefined,{}); itn.select(null); });
+  await step('SALES','Hold a supplier while building', ['hold','cApply'], async()=>{ const t=itn.activeUnits().find(u=>u.status==='NEW'); if(t){ itn.select(t.id); if(itn.itemRequestHoldEnabled(t).ok) await itn.itemRequestHoldExec(t,{}); itn.select(null); } if(itn.inChange()) await itn.pendingChangesApplyExec(undefined,{}); }, true);
+  await step('SALES','Re-hold once the hold expires', ['expire','hold','cApply'], async()=>{ const t=itn.activeUnits().find(u=>(u.holds||[]).length); if(t){ itn.select(t.id); const h=t.holds[0]; if(itn.itemToggleHoldExpiredEnabled(t).ok) await itn.itemToggleHoldExpiredExec(t,{holdId:h.id}); if(itn.itemRequestHoldEnabled(t).ok) await itn.itemRequestHoldExec(t,{}); itn.select(null); } if(itn.inChange()) await itn.pendingChangesApplyExec(undefined,{}); }, true);
+  await step('SALES','Prepare the itinerary', ['prepare'], async()=>{ await itn.itnyPrepareExec(); });
+  await step('SALES','Generate the quote document', ['quote'], async()=>{ await itn.itnyQuoteExec(); });
+  await step('SALES','Send the quote', ['toQuoted'], async()=>{ await itn.itnyToQuotedExec(); });
+  await step('CLIENT','Accept the quote', ['accept'], async()=>{ await itn.itnyAcceptExec(); });
+  await step('SALES','Generate the invoice document', ['invoice'], async()=>{ await itn.itnyInvoiceExec(); });
+  await step('SALES','Issue the invoice & request the deposit', ['toInvoiced'], async()=>{ await itn.itnyToInvoicedExec(); });
+  await step('FINANCE','Record the client deposit', ['pay'], async()=>{ await itn.itnyPayExec(undefined,{amount:itn.depositAmt()}); });
+  await step('SALES','Send vouchers to suppliers', ['voucher'], async()=>{ await itn.itnySendVouchersExec(); });
+  await step('SUPPLIER','Confirm the vouchers (booking refs)', ['voucherConfirm'], async()=>{ await confirmVouchers('BK'); });
+  await step('SALES','Confirm the itinerary', ['confirm'], async()=>{ await itn.itnyConfirmExec(); });
+
+  // ---- Ops handover: ops-confirm every line, then issue the Final Confirmation Advice ----
+  setPhase('Ops handover');
+  await step('OPS','Ops-confirm every line (OPS_READY)', ['opsReady'], async()=>{ for(const u of itn.billableUnits().slice()){ itn.select(u.id); if(itn.itemToggleOpsReadyEnabled(u).ok) await itn.itemToggleOpsReadyExec(u,{}); } itn.select(null); });
+  await step('OPS','Generate the Final Confirmation Advice (FCA)', ['generateFCA'], async()=>{ if(itn.itnyGenerateFCAEnabled().ok) await itn.itnyGenerateFCAExec(); });
+
+  // ---- Change loop 1: client amendment — money collected DURING the change (before apply) ----
+  setPhase('Change loop 1 · client amendment — money collected during the change');
+  await step('CLIENT','Request a change', ['openChange'], async()=>{ await itn.pendingChangesOpenExec(undefined,{initiator:'CLIENT_REQUEST'}); });
+  await step('SALES','Amend the booking (items / pax / price)', ['editItemsPax'], async()=>{ const s=acc(); itn.select(s.id); await itn.itemManagePriceExec(s,{price:s.sellPrice+500}); itn.select(null); });
+  await step('SALES','Prepare the change', ['cPrepare'], async()=>{ await itn.pendingChangesPrepareExec(); });
+  await step('SALES','Generate the change quote', ['cQuote'], async()=>{ await itn.pendingChangesQuoteExec(); });
+  await step('CLIENT','Approve the change quote', ['cApprove'], async()=>{ await itn.pendingChangesApproveExec(); });
+  await step('SALES','Generate the change invoice', ['cInvoice'], async()=>{ await itn.pendingChangesInvoiceExec(); });
+  await step('FINANCE','Collect the balance now (during the change)', ['pay'], async()=>{ if(itn.due()>0 && itn.itnyPayEnabled().ok) await itn.itnyPayExec(undefined,{amount:itn.due()}); });
+  await step('SALES','Apply the change (re-issue vouchers)', ['cApply'], async()=>{ await itn.pendingChangesApplyExec(undefined,{confirmVouchers:true}); });
+  await step('SUPPLIER','Confirm the re-issued voucher', ['voucherConfirm'], async()=>{ await confirmVouchers('BK-AM1'); });
+
+  // ---- Change loop 2: seller correction — the supplier REJECTS the re-issued voucher ----
+  setPhase('Change loop 2 · seller correction — supplier rejects the voucher');
+  await step('SALES','Open a seller change', ['openChange'], async()=>{ await itn.pendingChangesOpenExec(undefined,{initiator:'SELLER'}); });
+  await step('SALES','Amend the booking (items / pax / price)', ['editItemsPax'], async()=>{ const s=acc(); itn.select(s.id); await itn.itemManagePriceExec(s,{price:s.sellPrice+250}); itn.select(null); });
+  await step('SALES','Prepare the change', ['cPrepare'], async()=>{ await itn.pendingChangesPrepareExec(); });
+  await step('SALES','Generate the change quote', ['cQuote'], async()=>{ await itn.pendingChangesQuoteExec(); });
+  await step('CLIENT','Approve the change quote', ['cApprove'], async()=>{ await itn.pendingChangesApproveExec(); });
+  await step('SALES','Generate the change invoice', ['cInvoice'], async()=>{ await itn.pendingChangesInvoiceExec(); });
+  await step('SALES','Apply the change (re-issue vouchers)', ['cApply'], async()=>{ await itn.pendingChangesApplyExec(undefined,{confirmVouchers:true}); });
+  await step('SUPPLIER','Reject the re-issued voucher', ['voucherReject'], async()=>{ await rejectVouchers('No availability for the revised dates'); });
+
+  // ---- Re-loop: a rejection forces another change — resolve every rejected line, re-quote/approve/invoice/apply and
+  //      re-confirm, until the client approves AND the supplier confirms. Money is then collected AFTER the change. ----
+  setPhase('Change loop 2 (re-loop) · resolve the rejection, re-issue until confirmed');
+  await step('SALES','Open a change to resolve the rejection', ['openChange'], async()=>{ if(!itn.inChange()) await itn.pendingChangesOpenExec(undefined,{initiator:'SELLER'}); });
+  await step('SALES','Re-confirm every rejected line', ['markAwaiting'], async()=>{ for(const u of itn.activeUnits().slice()){ if(u.supplierStatus==='Rejected'){ itn.select(u.id); if(itn.itemMarkAwaitingEnabled(u).ok) await itn.itemMarkAwaitingExec(u,{}); } } itn.select(null); });
+  await step('SALES','Prepare the change', ['cPrepare'], async()=>{ if(itn.pendingChangesPrepareEnabled().ok) await itn.pendingChangesPrepareExec(); });
+  await step('SALES','Generate the change quote', ['cQuote'], async()=>{ if(itn.pendingChangesQuoteEnabled().ok) await itn.pendingChangesQuoteExec(); });
+  await step('CLIENT','Approve the change quote', ['cApprove'], async()=>{ if(itn.pendingChangesApproveEnabled().ok) await itn.pendingChangesApproveExec(); });
+  await step('SALES','Generate the change invoice', ['cInvoice'], async()=>{ if(itn.pendingChangesInvoiceEnabled().ok) await itn.pendingChangesInvoiceExec(); });
+  await step('SALES','Apply the change (re-issue vouchers)', ['cApply'], async()=>{ await itn.pendingChangesApplyExec(undefined,{confirmVouchers:true}); });
+  await step('SUPPLIER','Confirm the re-issued voucher', ['voucherConfirm'], async()=>{ await confirmVouchers('BK-AM2'); });
+  await step('FINANCE','Collect the outstanding balance (after the change)', ['pay'], async()=>{ if(itn.due()>0 && itn.itnyPayEnabled().ok) await itn.itnyPayExec(undefined,{amount:itn.due()}); });
+
+  // ---- render: a five-lane swimlane (CLIENT / SALES / FINANCE / OPS / SUPPLIER) + the live state after each step ----
+  const lanes = ['CLIENT','SALES','FINANCE','OPS','SUPPLIER'];
+  let body='', curPhase=null;
+  seq.forEach(r=>{
+    if(r.phase!==curPhase){ curPhase=r.phase; body += `<tr><td colspan="${lanes.length+1}" style="background:#0f1620;color:var(--warn);font-weight:700">${esc(curPhase)}</td></tr>`; }
+    const acts = r.acts.length ? `<div class="acts">${r.acts.map(a=>{ const m=meta[a]||{desc:a,cat:'item'}; return `<span class="act" title="${esc(a)}"><span class="cat cat-${m.cat}">${esc(CATLBL[m.cat]||m.cat)}</span>${esc(m.desc)}</span>`; }).join('')}</div>` : '';
+    const tag = r.opt ? ' <span class="rid">optional</span>' : '';
+    const cells = lanes.map(l=> l!==r.party ? '<td></td>'
+      : `<td style="border-left:3px solid ${PARTY[l]}${r.opt?';opacity:.72':''}"><b style="color:${PARTY[l]}">●</b> ${esc(r.label)}${tag}${acts}</td>`).join('');
+    const payCls = /FULLY_PAID/.test(r.pay)?'rec-Booked':(/NEEDS_PAYMENT|OVERPAID/.test(r.pay)?'rec-AwaitingSupplier':'');
+    const chgCell = (r.pend&&r.pend!=='NONE') ? `<span class="chip rec-AwaitingSupplier">chg ${esc(r.pend)}</span>` : `<span class="chip" style="opacity:.35">no change</span>`;
+    const grp = (label,chip)=>`<div class="chipgrp"><span class="gl">${label}</span>${chip}</div>`;
+    const state = `<div class="statecol">${grp('itinerary',`<span class="chip">${esc(r.st)}</span>`)}${grp('change',chgCell)}${grp('payment',`<span class="chip ${payCls}">${esc(r.pay)}</span>`)}</div>`;
+    body += `<tr>${cells}<td>${state}</td></tr>`;
+  });
+  const head = `<tr>${lanes.map(l=>`<th style="color:${PARTY[l]}">${l}</th>`).join('')}<th>state after (itinerary · change · payment)</th></tr>`;
+  return `<section id="flow"><h2><span class="n">0b</span> Booking flow — five roles, end to end</h2>
+    <p class="lead">The whole booking process, driven live on the real aggregate and annotated by the five roles. The operator splits into the three role-gated users — <b style="color:var(--good)">SALES</b> (SP), <b style="color:var(--pend)">FINANCE</b> (FIN) and <b style="color:var(--warn)">OPS</b> — alongside the external <b style="color:var(--acc)">CLIENT</b> and <b style="color:var(--rec)">SUPPLIER</b>. They hand off across the initial booking (build, optional supplier holds, the quote &amp; invoice documents, deposit, vouchers) and the <b>ops handover</b> (ops-confirm every line, then the FCA), then through <b>two loops of changes</b>. Each change re-quotes, re-approves, re-invoices, applies and re-confirms the supplier — and <b>money is always collected</b>, either during the change (loop 1) or after it (loop 2). When the <b style="color:var(--rec)">supplier rejects</b> a re-issued voucher, another change loop is needed: resolve every rejected line and re-issue until the client approves <em>and</em> the supplier confirms. The right column is the live state after every step.</p>
+    <div class="legend"><span><b style="color:var(--acc)">●</b> CLIENT</span><span><b style="color:var(--good)">●</b> SALES</span><span><b style="color:var(--pend)">●</b> FINANCE</span><span><b style="color:var(--warn)">●</b> OPS</span><span><b style="color:var(--rec)">●</b> SUPPLIER</span></div>
+    <div class="scroll"><table>${head}${body}</table></div>
+    <p class="why">Same actions as the simulator — the operating user (<code>SP</code> / <code>FIN</code> / <code>OPS</code>) plus the external <code>client</code> / <code>supplier</code> actor decides the lane. The chips under each step are the <a href="#item">getActions()</a> invoked, in order, each prefixed by its category badge — <span class="cat cat-itny">Itny</span> <span class="cat cat-item">Item</span> <span class="cat cat-pendingChanges">Change</span> <span class="cat cat-voucher">Voucher</span> <span class="cat cat-document">Document</span> (hover a chip for the action id). The <span class="cat cat-item">Item</span> <em>Change items and/or pax</em> chip stands in for the whole catalogue of in-change edits (price, qty, dates, add/remove pax, allocate, cancel, remove…). <span class="rid">optional</span> steps (supplier holds / re-hold) are illustrative and skippable. A change <b>loops</b>: open → prepare → quote → approve → invoice → apply → supplier re-confirm; a supplier rejection restarts the loop, any number of times over the life of a booking.</p>
+  </section>`;
+}
+
+/* ---------- price calculator (interactive sandbox — mirrors the price-engine chain in itny.js) ---------- */
+// The price-engine build-up: net → (discount) → purchase → CPS margin + TC commission → last-contracted sell →
+// uplift (hypothetical lines, always applied) → sell. Sliders are ephemeral; the arithmetic matches refreshDerived().
+function sectionPriceCalculator(){
+  const sl=(id,label,min,max,step,val,suf)=>`<div class="crow" id="row_${id}"><span class="cl">${label}</span>`
+    +`<input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}" oninput="pcCalc()">`
+    +`<b class="cv" id="${id}V">${val}${suf||''}</b></div>`;
+  const sw=(id,label,checked)=>`<label class="cswitch"><input type="checkbox" id="${id}"${checked?' checked':''} oninput="pcCalc()"><span>${label}</span></label>`;
+  return `<section id="pricecalc"><h2><span class="n">$</span> Price calculator <span class="hint" style="font-weight:400">(interactive)</span></h2>
+    <p class="lead">Drag the levers to see how a client <b>sell price</b> is built up from the supplier <b>net</b> — the same chain the price engine runs in <b>itny.js</b>. The <b>system price</b> is the pure engine output (incl. uplift); turn on <b>manual pricing</b> to override it with a flat custom total or a custom-margin build-up that <b>ignores uplift</b> — the manual price then wins for the client sell.</p>
+    <div class="grid2">
+      <div>
+        <div class="cgroup"><div class="gh">Supplier cost</div>
+          ${sl('pc_net','Net price',0,500,5,100,'')}
+          ${sl('pc_disc','Discount',0,50,1,10,'%')}
+          ${sl('pc_rack','Rack (ceiling)',0,600,5,150,'')}
+          <div style="margin:6px 0 4px">${sw('pc_sellOn','Supplier set the sell price (margin already included)',false)}</div>
+          ${sl('pc_sell','Sell price',0,800,5,140,'')}
+        </div>
+        <div class="cgroup"><div class="gh">Your margin</div>
+          ${sl('pc_cps','Seller margin',0,120,1,30,'%')}
+        </div>
+        <div class="cgroup"><div class="gh">Travel consultant</div>
+          <div style="margin:2px 0 6px">${sw('pc_tcOn','Add TC commission',true)}</div>
+          ${sl('pc_tc','TC commission',0,30,1,6,'%')}
+        </div>
+        <div class="cgroup"><div class="gh">Future pricing <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">— hypothetical lines (no confirmed rate)</span></div>
+          ${sl('pc_up','Uplift',0,50,1,15,'%')}
+          ${sl('pc_yrs','Years out',0,5,1,1,'y')}
+        </div>
+        <div class="cgroup"><div class="gh">Manual pricing <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">— overrides the system price · NO uplift</span></div>
+          <div style="margin:2px 0 6px">${sw('pc_manOn','Seller set a manual price',false)}</div>
+          <div style="margin:2px 0 6px">${sw('pc_manFlat','Flat custom total sell (else custom margin)',false)}</div>
+          ${sl('pc_manTotal','Custom total sell',0,1500,5,500,'')}
+          ${sl('pc_manMargin','Manual margin',0,120,1,50,'%')}
+        </div>
+      </div>
+      <div id="pcout" class="calc-result"></div>
+    </div></section>`;
+}
+function pcCalc(){
+  const out=document.getElementById('pcout'); if(!out) return;
+  const num=(id,d)=>{const el=document.getElementById(id);return el?(+el.value):d;};
+  const chk=(id,d)=>{const el=document.getElementById(id);return el?el.checked:d;};
+  const r=Math.round;
+  const net=num('pc_net',100), disc=num('pc_disc',10), rack=num('pc_rack',150), m=num('pc_cps',30),
+        sellOn=chk('pc_sellOn',false), provided=num('pc_sell',140),
+        tcOn=chk('pc_tcOn',true), tc=num('pc_tc',6), up=num('pc_up',15), yrs=num('pc_yrs',1),
+        manOn=chk('pc_manOn',false), manFlat=chk('pc_manFlat',false), manTotal=num('pc_manTotal',500), manMargin=num('pc_manMargin',50);
+  const purchase=r(net*(1-disc/100)), discMoney=net-purchase;
+  const tcAmt=tcOn?r(purchase*tc/100):0;
+  // ---- SYSTEM price: the pure engine output (incl. uplift), shown AS-IS — never moved by the manual levers. ----
+  const baseSell=sellOn?provided:(purchase+r(purchase*m/100));     // supplier-set sell (margin baked in) else net + margin
+  const cps=baseSell-purchase, effMargin=purchase>0?r(cps/purchase*100):m;
+  const sysLast=baseSell+tcAmt;
+  // a hypothetical line ALWAYS gets the uplift: at least one full uplift, linear with years out (max(1, yrs)), NOT compounded.
+  const yEff=Math.max(1,yrs), upPct=yEff*up, factor=1+upPct/100;
+  const sysSell=r(sysLast*factor), upMoney=sysSell-sysLast, rackUp=r(rack*factor);
+  // ---- MANUAL price: only when the seller set it. IGNORES uplift. flat → the number; else purchase + margin + TC. ----
+  const manBase=manFlat?manTotal:(purchase+r(purchase*manMargin/100));
+  const manCps=manBase-purchase, manSell=manFlat?manTotal:(manBase+tcAmt);
+  const client=manOn?manSell:sysSell, over=client>rackUp;        // the manual price WINS for the actual client sell
+  // live slider values + dim the inactive lever rows
+  const setV=(id,v)=>{const el=document.getElementById(id+'V');if(el)el.textContent=v;};
+  setV('pc_net','$'+net); setV('pc_disc',disc+'%'); setV('pc_rack','$'+rack); setV('pc_cps',m+'%');
+  setV('pc_sell','$'+provided); setV('pc_tc',tc+'%'); setV('pc_up',up+'%'); setV('pc_yrs',yrs+'y');
+  setV('pc_manTotal','$'+manTotal); setV('pc_manMargin',manMargin+'%');
+  const dim=(id,on)=>{const el=document.getElementById(id);if(el)el.style.opacity=on?'1':'.35';};
+  dim('row_pc_cps',!sellOn); dim('row_pc_sell',sellOn); dim('row_pc_tc',tcOn);
+  dim('row_pc_manTotal',manOn&&manFlat); dim('row_pc_manMargin',manOn&&!manFlat);
+  // receipts
+  const line=(l,v,cls,sub)=>`<div class="rline ${cls||''}"><span class="rl">${l}${sub?` <small>${sub}</small>`:''}</span><span class="rv">${v}</span></div>`;
+  const sep=`<div class="rsep"></div>`;
+  let sysRec=line('Net price','$'+net,'minor','supplier');
+  if(disc>0) sysRec+=line('Discount '+disc+'%','−$'+discMoney,'sub');
+  sysRec+=sep+line('Purchase','$'+purchase,'','supplier sell price');
+  sysRec+=sellOn?line('CPS margin','+$'+cps,'add','incl. in sell · '+effMargin+'%'):line('CPS margin '+m+'%','+$'+cps,'add');
+  if(tcOn) sysRec+=line('TC commission '+tc+'%','+$'+tcAmt,'add');
+  if(tcOn) sysRec+=sep+line('<b>Sum</b>','$'+sysLast,'','purchase + margin + TC');
+  sysRec+=line('Uplift '+up+'%'+(yEff!==1?' × '+yEff+'y':''),'+$'+upMoney,'add','hypothetical');
+  let manRec='';
+  if(manOn){
+    if(manFlat){ manRec=line('Custom total sell','$'+manTotal,'','flat — overrides the engine'); }
+    else {
+      manRec=line('Purchase','$'+purchase,'minor','supplier sell price');
+      manRec+=line('CPS margin '+manMargin+'%','+$'+manCps,'add','manual margin');
+      if(tcOn) manRec+=line('TC commission '+tc+'%','+$'+tcAmt,'add');
+    }
+  }
+  out.innerHTML=`<div class="calc-hero"><div class="lbl">Client sell price ${manOn?'<small>(manual)</small>':'<small>(system)</small>'}</div><div class="amt">$${client}</div>`
+    +`<div class="sub">you pay supplier $${purchase}${manOn?` · system price $${sysSell}`:` · you earn $${cps+tcAmt}${upMoney?` · +$${upMoney} uplift`:''}`}</div></div>`
+    +`<div class="receipt"><div class="rcap">System price <small>pure engine · incl. uplift</small></div>${sysRec}<div class="rtotal"><span>System sell</span><span class="rv">$${sysSell}</span></div></div>`
+    +(manOn?`<div class="receipt" style="margin-top:8px"><div class="rcap">Manual price <small>overrides the system · NO uplift</small></div>${manRec}<div class="rtotal"><span>Manual sell</span><span class="rv">$${manSell}</span></div></div>`:'')
+    +`<div class="rfoot ${over?'bad':''}">Rack ceiling $${rackUp} ${over?`· ⚠ client sell over ceiling by $${client-rackUp}`:`· client sell within ceiling ✓`}</div>`;
+}
+
+/* ---------- boot ---------- */
+(async function(){
+  document.getElementById('meta').textContent = CFG.meta.title+' · v'+CFG.meta.version;
+  const app = document.getElementById('app');
+  const sections = [
+    ['scope', async()=>`<section id="scope"><h2><span class="n">0</span> Three lifecycles, one aggregate</h2>
+      <p class="lead">${L.overview.lead}</p>
+      <div class="branchrow">${L.overview.cards.map(c=>`<div class="branch"><div class="bh"><span class="cat cat-${c.cat}">${c.cat}</span> ${c.h}</div><div class="bs">${c.body}</div></div>`).join('')}</div></section>`],
+    ['flow', sectionBookingFlow],
+    ['itn', sectionItinerary],['brochure', sectionBrochure],['chg', sectionChange],['scope2', sectionScope],
+    ['item', sectionItem],['pricecalc', sectionPriceCalculator],['holds', sectionHolds],['voucher', sectionVoucher],['payment', sectionPayment],['promo', sectionPromotions],['cat', sectionCatalogue],['views', sectionViews],['json', sectionJson],
+  ];
+  for(const [id, fn] of sections){
+    const div = document.createElement('div');
+    try { div.innerHTML = await fn(); }
+    catch(e){ div.innerHTML = `<section><h2>${id}</h2><div class="err">⚠ could not generate this section: ${esc(e.message)}</div></section>`; console.error(id, e); }
+    app.appendChild(div);
+  }
+  if(document.getElementById('pcout')) pcCalc();   // initial render of the interactive price calculator
+})();
+</script>
+</body>
+</html>

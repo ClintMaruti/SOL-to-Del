@@ -1,0 +1,2 @@
+import{b as e,j as o,H as t,R as s}from"./index-4ewCJrNr.js";function d(){const{t:n}=e(["admin","common"]);return o.jsxs("div",{className:"p-8",children:[o.jsx("h1",{className:"text-4xl font-bold text-foreground mb-4",children:n("admin:modals.notFoundTitle")}),o.jsx("p",{className:"text-muted-foreground mb-4",children:n("admin:modals.notFoundDescription")}),o.jsx(t,{to:s.DESTINATIONS,className:"text-brand-red hover:underline",children:n("common:buttons.goToHome")})]})}export{d as NotFoundPage};
+//# sourceMappingURL=NotFoundPage-D5J992sx.js.map

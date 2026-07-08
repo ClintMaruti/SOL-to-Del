@@ -1,0 +1,2 @@
+import{a as t}from"./index-4ewCJrNr.js";import{u as e}from"./error-utils-q4z9blzD.js";import{n as o}from"./normalizeCatalogExtraListItem-DdSTCa_e.js";function i(a){return e({queryKey:["catalog-extras","supplier",a],queryFn:async()=>{const r=await t.get(`/catalog/suppliers/${a}/extras`);return Array.isArray(r)?r.map(o):[]},enabled:!!a})}export{i as u};
+//# sourceMappingURL=useSupplierExtras-DjYnkERe.js.map

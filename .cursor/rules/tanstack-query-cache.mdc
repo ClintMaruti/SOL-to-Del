@@ -1,0 +1,39 @@
+---
+description: TanStack Query cache invalidation and state sync after mutations
+globs: "**/*use*.ts,**/api/*.ts,**/entities/**/*.ts"
+alwaysApply: false
+---
+
+# TanStack Query Cache & State Invalidation
+
+After mutations (create/update/toggle/delete), ensure the UI reflects the latest data. Stale cache causes lists and detail pages to show outdated state.
+
+## Rules
+
+1. **Invalidate list queries after mutations.** Use `queryClient.invalidateQueries({ queryKey: ['entity'] })` in `onSuccess` for create/update/delete.
+2. **Optimistic updates for toggles.** When toggling status (e.g. Active/Inactive), use `setQueryData` for both the list and detail cache. For activate/deactivate hooks (`useToggle*Status`), follow **`.cursor/rules/toggle-status-mutation-cache.mdc`** — prefer **`updateToggleStatusListCaches`** from `@/shared/lib` for list caches, then update the detail query; invalidate parent queries if the entity is nested (e.g. agents under agency).
+3. **Keep detail and list in sync.** If a mutation changes an entity, update or invalidate the detail query so Detail page and List page show the same state.
+4. **New items in lists.** After create, either invalidate the list (simplest) or use `setQueryData` to insert the new item in sorted order. Avoid requiring a manual refresh to see new items.
+5. **Optimistic UI with reconciliation.** Never rely on optimistic updates alone. When using `setQueryData`, also invalidate the affected queries so a background refetch can reconcile with the server and correct drift.
+
+## Examples
+
+```typescript
+// BAD: No invalidation after create
+onSuccess: () => {},
+
+// GOOD: Invalidate list
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["destinations"] });
+},
+```
+
+```typescript
+// Toggle status: see toggle-status-mutation-cache.mdc (updateToggleStatusListCaches).
+// Simpler flows may still use invalidate for reconciliation:
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["destinations"] });
+},
+```
+
+**Reference:** `toggle-status-mutation-cache.mdc` (toggle hooks), `features/create-destination/api/useCreateDestination.ts` (create flows)

@@ -1,0 +1,60 @@
+---
+description: Entity types, Patch/Update payload types, update and toggle mutation hook structure
+globs: "**/entities/**/*.ts","**/entities/**/*.tsx","**/features/**/model/types.ts","**/features/**/api/useUpdate*.ts","**/entities/**/api/useToggle*.ts"
+alwaysApply: false
+---
+
+# Entity Types, Patch Types & Update Hooks
+
+## 1. Entity/Feature Types (model/types.ts)
+
+- **Location**: `entities/<entity>/model/types.ts` or feature `model/types.ts`.
+- **Structure**:
+  - Export const arrays for enums with `as const`, then derive type: `type X = (typeof X_VALUES)[number]`.
+  - Base interface for list/card (e.g. `Supplier`) with required and optional fields.
+  - Detail interface extending base (e.g. `SupplierDetail extends Supplier`) for view/update with extra fields.
+- **Documentation**: JSDoc on interfaces and non-obvious fields (constraints, FKs, defaults).
+
+**Reference:** `apps/admin/src/entities/suppliers/model/types.ts`
+
+## 2. Patch / Update Payload Types
+
+For update/PATCH APIs, **do not** duplicate the full detail type. Derive the payload from the detail type:
+
+- Use **`Partial<Omit<DetailType, "readOnlyField1" | "readOnlyField2">>`**.
+- **`Omit`** server-managed or read-only fields (e.g. display names like `headOfficeName`, `locationName`, or IDs that are not sent on update).
+- **`Partial`** so every field is optional for partial updates.
+
+```typescript
+export type UpdateSupplierPayload = Partial<
+  Omit<SupplierDetail, "headOfficeName" | "locationName">
+>;
+```
+
+**Reference:** `apps/admin/src/entities/suppliers/api/useUpdateSupplier.ts` (lines 9–11)
+
+## 3. Update Mutation Hook Structure
+
+- **Location**: `entities/<entity>/api/useUpdate<Entity>.ts`.
+- **Exports**: The payload type (e.g. `UpdateSupplierPayload`) and the hook `useUpdate<Entity>`.
+- **Hook**:
+  - `useMutation` with `mutationFn: async ({ entityId, payload }) => api.put<DetailType>(...)`.
+  - Typed params: `{ entityId: string; payload: UpdateEntityPayload }`.
+  - Return type: `Promise<DetailType | null>`.
+  - `onSuccess`: invalidate list and detail query keys, then user feedback (e.g. `toast.success`).
+
+**Reference:** `apps/admin/src/entities/suppliers/api/useUpdateSupplier.ts`
+
+## 4. Toggle / Status Mutation Hook Structure
+
+- **Location**: `entities/<entity>/api/useToggle<Entity>Status.ts` (or similar).
+- **Exports**: A **params interface** (e.g. `ToggleSupplierStatusParams`) and the hook.
+- **Params interface**: Explicit typed object, e.g. `{ entityId: string; activate: boolean }`.
+- **Hook**:
+  - `useMutation` with `mutationFn: async (params) => Promise<DetailType | undefined>`.
+  - **Loading state**: Set loading at start of `mutationFn`, clear in `onSuccess` and `onError` (e.g. via a store like `useLoadingStates`).
+  - **onSuccess**: Clear loading → `setQueryData` for list and detail (update the toggled field) → `invalidateQueries` for list, detail, and any parent keys (reconciliation).
+  - **onError**: Clear loading, then `toast.error(getErrorMessage(error, i18n fallback))`.
+- **Optimistic-style cache**: Update list and detail cache with `setQueryData`, then always invalidate so a refetch reconciles with the server.
+
+**Reference:** `apps/admin/src/entities/suppliers/api/useToggleSupplierStatus.ts`

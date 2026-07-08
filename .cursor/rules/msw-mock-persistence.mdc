@@ -1,0 +1,37 @@
+---
+description: MSW stateful handlers for CRUD persistence in tests
+globs: "packages/api-client/src/msw/**/*.ts"
+alwaysApply: false
+---
+
+# MSW Mock Persistence
+
+MSW handlers are stateless by default. For CRUD to persist across requests in tests, use shared mutable state.
+
+## Rules
+
+1. **Stateful handlers.** Use shared mutable state (e.g. `let mockData = [...]`) and mutate it in handlers. Create/update/delete operations will then be reflected in subsequent get requests.
+2. **Handlers vs controllers.** Centralize state in a controller module and have handlers read/write it.
+3. **Test isolation.** Restore or reset state in `beforeEach` if needed for test isolation.
+
+## Examples
+
+```typescript
+// BAD: const - cannot mutate, CRUD won't persist
+const mockDestinations = [...];
+
+// GOOD: let - handlers can mutate
+let mockDestinations: MockDestination[] = [...];
+```
+
+```typescript
+// GOOD: Handler mutates shared state on create
+http.post("/api/catalog/locations", async ({ request }) => {
+  const body = await request.json();
+  const newItem = { id: uuid(), ...body };
+  mockDestinations.push(newItem);
+  return HttpResponse.json(newItem);
+});
+```
+
+**Reference:** `packages/api-client/src/msw/handlers.ts` - `let mockDestinations`, controller pattern

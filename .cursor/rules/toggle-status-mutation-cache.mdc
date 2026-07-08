@@ -1,0 +1,63 @@
+---
+description: TanStack Query cache updates for activate/deactivate (toggle status) mutations
+globs: "**/useToggle*Status.ts,**/entities/**/api/useToggle*.ts"
+alwaysApply: false
+---
+
+# Toggle status mutations (`useToggle*Status`)
+
+When implementing activate/deactivate mutations, keep **every cached list variant** and the **detail** query aligned without overwriting the wrong query shape.
+
+## Shared helper (preferred)
+
+Use **`updateToggleStatusListCaches`** from `apps/admin/src/shared/lib/toggleStatusQueryCache.ts` (re-exported from `@/shared/lib`). It:
+
+1. Updates the **root list** key with `map(toggle)` (arrays only).
+2. Runs **`findAll({ queryKey: root })`** and applies the same toggle to every other matching key, skipping:
+   - `queryKey.length === 1` (root — already updated).
+   - `queryKey.length === 2 && queryKey[1] === entityId` (detail cache for that entity — update separately).
+3. For non-skipped keys, uses **`applyToggleToListOrEntityCache`**: if the cache holds an **array**, map `toggle`; if it holds a **single entity** with an `id`, apply `toggle` once (covers nested list/single shapes under the same prefix).
+
+Then in the hook, still **set the detail query** yourself (project-specific key, e.g. `["agent", id]` vs `["agencies", id]`) and **invalidate** only broader parent scopes when needed (e.g. `["agencies", agencyId]`).
+
+## Required `onSuccess` pattern
+
+1. **Clear loading UI** for the entity id (e.g. Zustand `setXxxStatus(id, false)`), same as in `onError`.
+
+2. **Single `toggle` mapper** — flip `isActive` only for the matching id:
+
+   ```typescript
+   const toggle = (row: Entity) =>
+     row.id === entityId ? { ...row, isActive: !row.isActive } : row;
+   ```
+
+3. **List caches** — call `updateToggleStatusListCaches({ queryClient, rootQueryKey: [ROOT_KEY], entityId, toggle })`.
+
+4. **Detail query** — update the single-entity cache with the same flip (use the project’s detail key — match existing `useXxx` / page queries).
+
+5. **Nested relations** — if the API returns a parent id (e.g. agent has `agencyId`), **invalidate** the broader parent scope when lists there can show stale status: e.g. `invalidateQueries({ queryKey: ["agencies", agencyId] })`.
+
+### Important for table UX
+
+- For row-level toggles inside an active table, **do not invalidate the current list query** just to reconcile status.
+- Update the cached row in place so the table keeps its current client-side sort, pagination, filters, and scroll position.
+- The only time a row should visibly move after a toggle is when the current sort itself depends on the changed field, such as sorting by `isActive`.
+
+### Manual equivalent (only if you cannot use the helper)
+
+Same behavior as the helper: root `setQueryData` + `findAll` with skips above; for prefixed keys prefer an updater that handles **both** `Entity[]` and a single `Entity` where the prefix can store either.
+
+## Anti-patterns
+
+- **`findAll` + `setQueryData` on every key** without skipping `length === 2 && [1] === id` — overwrites detail cache with an array or wrong shape.
+- **Only** updating `["entities"]`** — misses filtered lists (`["entities", filterId]`).
+- **Forgetting the explicit root update** when the loop only handles prefixed keys — root list never updates.
+
+## References
+
+- `apps/admin/src/shared/lib/toggleStatusQueryCache.ts`
+- `apps/admin/src/entities/agency/api/useToggleAgencyStatus.ts`
+- `apps/admin/src/entities/suppliers/api/useToggleSupplierStatus.ts`
+- `apps/admin/src/entities/agent/api/useToggleAgentStatus.ts` (detail key + optional parent invalidation)
+
+Related: `.cursor/rules/tanstack-query-cache.mdc` for general mutation invalidation.

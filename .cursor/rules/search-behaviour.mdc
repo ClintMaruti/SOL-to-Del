@@ -1,0 +1,38 @@
+---
+description: Search input behaviour - min characters, debounce, URL sync, clear button
+globs: "**/features/**/*search*/*.ts,**/widgets/**/*search*/*.ts,**/model/use*Search*.ts"
+alwaysApply: false
+---
+
+# Search Behaviour
+
+Search and filter inputs should follow consistent UX patterns to avoid noise and unintended persistence.
+
+## Rules
+
+1. **Minimum characters.** Don't trigger search/filter from the first character. Use a threshold (e.g. 3+ characters) before filtering. Return the full list when below threshold.
+2. **Debounce.** Use `useDebouncedValue` (or similar) for search input to avoid excessive re-renders and API calls.
+3. **URL persistence.** Only persist search query to URL if the feature explicitly wants it. If search is transient, avoid syncing to `searchParams` so it doesn't survive refresh unintentionally.
+4. **Clear button.** Search fields that filter lists should have a clear (X) button for UX.
+5. **Highlight matches.** When showing search results, consider highlighting the matched text (e.g. `useHighlightMatch`).
+
+## Examples
+
+```typescript
+// GOOD: Min 3 chars before filtering
+if (!query || query.length < 3) {
+  return destinations; // full list
+}
+```
+
+```typescript
+// GOOD: Debounce search input
+const debouncedQuery = useDebouncedValue(searchQuery, 300);
+```
+
+```typescript
+// AVOID: Syncing transient search to URL unless intended
+// Don't use setSearchParams for search if you don't want it to persist on refresh
+```
+
+**Reference:** `features/destination-search/model/useDestinationSearch.ts` - `query.length < 3`, `useDebouncedValue(searchQuery, 300)`

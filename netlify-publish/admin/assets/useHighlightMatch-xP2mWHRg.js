@@ -1,0 +1,2 @@
+import{r as a,j as u}from"./index-4ewCJrNr.js";function p(r,s){return a.useMemo(()=>{const e=s?.trim();if(!e||e.length<3)return r;if(!r)return"";const o=e.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),t=new RegExp(`(${o})`,"gi");return r.split(t).map((n,i)=>n.toLowerCase()===e.toLowerCase()?u.jsx("span",{className:"bg-brand-background-info font-semibold inline rounded-sm",children:n},i):n)},[r,s])}export{p as u};
+//# sourceMappingURL=useHighlightMatch-xP2mWHRg.js.map

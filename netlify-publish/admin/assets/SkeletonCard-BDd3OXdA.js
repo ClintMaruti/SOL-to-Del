@@ -1,0 +1,2 @@
+import{j as s}from"./index-4ewCJrNr.js";import{S as e}from"./skeleton-BQ47qM4y.js";function c({lines:a=3,hasAvatar:l=!1,hasActions:r=!1}){return s.jsxs("div",{className:"border rounded-lg p-4 space-y-3",children:[l&&s.jsx(e,{className:"h-12 w-12 rounded-full"}),Array.from({length:a}).map((o,m)=>s.jsx(e,{className:"h-4 w-full"},m)),r&&s.jsxs("div",{className:"flex gap-2 mt-4",children:[s.jsx(e,{className:"h-9 w-20"}),s.jsx(e,{className:"h-9 w-20"})]})]})}export{c as S};
+//# sourceMappingURL=SkeletonCard-BDd3OXdA.js.map

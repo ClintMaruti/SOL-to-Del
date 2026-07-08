@@ -1,0 +1,156 @@
+---
+alwaysApply: true
+---
+
+# Testing Strategy & Implementation Guide
+
+This project uses a multi-layered testing approach aligned with the testing pyramid: unit tests for fast feedback, integration tests for component interactions, and E2E tests for user workflows.
+
+## Testing Architecture
+
+### Testing Pyramid
+
+```
+Unit Tests (Vitest + RTL)
+  ↑ Many, fast, isolated
+
+Integration Tests (Vitest + RTL)
+  ↑ Component interactions
+
+E2E Tests (Playwright)
+  ↑ Few, high-level user flows
+```
+
+## Tools & Frameworks
+
+### Unit & Integration Testing
+
+- **Vitest** - Fast unit test framework
+- **@testing-library/react** - React component testing utilities
+
+### End-to-End Testing
+
+- **Playwright** - E2E testing framework
+
+## Test Organization
+
+### Hybrid Structure
+
+Tests are organized using a hybrid approach combining co-location with dedicated test directories:
+
+```
+apps/admin/src/
+├── entities/
+│   └── destination/
+│       ├── __tests__/              ← Dedicated test folder
+│       │   ├── destination-utils.test.ts
+│       │   └── useDestinations.test.tsx
+│       ├── api/
+│       ├── lib/
+│       └── model/
+├── features/
+│   └── destination-search/
+│       ├── __tests__/              ← Dedicated test folder
+│       │   ├── DestinationSearchInput.test.tsx
+│       │   └── useDestinationSearch.test.tsx
+│       ├── model/
+│       └── ui/
+└── widgets/
+    └── destination-tree/
+        ├── __tests__/              ← Dedicated test folder
+        │   └── DestinationTree.test.tsx
+        ├── model/
+        └── ui/
+
+apps/admin/e2e/
+└── tests/                          ← E2E tests separate
+    ├── destination-search.spec.ts
+    └── destination-tree.spec.ts
+```
+
+**Key Pattern**: Use `__tests__/` folder at the feature/widget/entity root level for consistency.
+
+## Running Tests
+
+### Unit/Integration Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run in watch mode
+pnpm test:watch
+
+# Run with coverage
+pnpm test:coverage
+
+# Run specific test file
+pnpm test destination-utils.test.ts
+```
+
+### E2E Tests
+
+```bash
+# Run all E2E tests
+pnpm test:e2e
+
+# Run in UI mode
+pnpm test:e2e:ui
+
+# Run specific test file
+pnpm test:e2e destination-tree.spec.ts
+
+# Run in debug mode
+pnpm test:e2e:debug
+```
+
+## Best Practices Summary
+
+### Do's ✅
+
+- ✅ Test behavior, not implementation
+- ✅ Use semantic queries (`getByRole`, `getByText`)
+- ✅ Group related tests with `describe` blocks
+- ✅ Use descriptive test names
+- ✅ Mock external dependencies
+- ✅ Test edge cases and error scenarios
+- ✅ Wait for state changes in E2E tests
+- ✅ Use test data factories for consistency
+- ✅ Keep tests isolated and independent
+- ✅ Follow AAA pattern (Arrange, Act, Assert)
+- ✅ Place test files in `__tests__/` folder at feature/widget/entity root
+
+### Don'ts ❌
+
+- ❌ Don't use `waitForTimeout` in E2E tests
+- ❌ Don't test implementation details
+- ❌ Don't rely on test execution order
+- ❌ Don't skip cleanup (`afterEach`, `afterAll`)
+- ❌ Don't use non-semantic selectors (`data-testid` unless necessary)
+- ❌ Don't test third-party library code
+- ❌ Don't write tests that depend on other tests
+- ❌ Don't ignore flaky tests — fix them
+- ❌ Don't scatter test files across subdirectories — use `__tests__/` at root level
+
+## Test File Naming
+
+- Unit/Integration tests: `*.test.ts` or `*.test.tsx`
+- E2E tests: `*.spec.ts`
+- Test files should be co-located in `__tests__/` folders
+
+## Example Test Structure
+
+```typescript
+import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+
+describe("FeatureName", () => {
+  describe("Component/Function Group", () => {
+    it("should do something specific", () => {
+      // Arrange
+      // Act
+      // Assert
+    });
+  });
+});
+```

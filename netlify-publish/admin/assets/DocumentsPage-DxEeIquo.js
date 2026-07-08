@@ -1,0 +1,2 @@
+import{b as n,j as e}from"./index-4ewCJrNr.js";function o(){const{t:s}=n(["admin","common"]);return e.jsxs("div",{className:"p-8",children:[e.jsx("h1",{className:"text-4xl font-bold text-foreground mb-4",children:s("admin:pages.documents")}),e.jsx("p",{className:"text-muted-foreground",children:s("admin:pages.documentsDescription")})]})}export{o as DocumentsPage};
+//# sourceMappingURL=DocumentsPage-DxEeIquo.js.map

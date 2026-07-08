@@ -1,0 +1,2 @@
+import{E as h,r as a}from"./index-4ewCJrNr.js";import{u as S}from"./useClearURLSearchParam-DK7IsyWE.js";import{u as p}from"./useDebouncedValue-TrebmWXz.js";function l(e){const{paramKey:s="search",debounceMs:c=300}=e??{},[u]=h(),[r,t]=a.useState(()=>u.get(s)??""),o=p(r,c);S(e?.paramKey);const m=a.useCallback(n=>{t(n)},[]);return{searchQuery:r,setSearchQuery:m,debouncedQuery:o}}export{l as u};
+//# sourceMappingURL=useDebouncedUrlSearch-bEC8a0bW.js.map

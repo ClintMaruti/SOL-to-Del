@@ -1,0 +1,57 @@
+{
+  "name": "sol-frontend-monorepo",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Safari OnLine Frontend Monorepo",
+  "packageManager": "pnpm@10.11.0",
+  "pnpm": {
+    "overrides": {
+      "react": "^19.2.0",
+      "react-dom": "^19.2.0"
+    }
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:admin": "pnpm --filter admin dev",
+    "dev:client": "pnpm --filter client dev",
+    "storybook": "pnpm --filter @sol/storybook storybook",
+    "storybook:build": "pnpm --filter @sol/storybook build-storybook",
+    "build": "pnpm --parallel --filter \"./apps/*\" build",
+    "build:admin": "pnpm --filter admin build",
+    "build:admin:netlify": "bash scripts/prepare-netlify-admin.sh",
+    "build:client": "pnpm --filter client build",
+    "lint": "pnpm --parallel --filter \"./apps/*\" lint",
+    "lint:fix": "pnpm --parallel --filter \"./apps/*\" lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,json,css,md}\"",
+    "type-check": "pnpm --parallel --filter \"./apps/*\" type-check",
+    "test": "pnpm --parallel --filter \"./apps/*\" test:unit",
+    "test:unit": "pnpm --parallel --filter \"./apps/*\" test:unit",
+    "test:unit:watch": "pnpm --parallel --filter \"./apps/*\" test:unit:watch",
+    "test:unit:ui": "pnpm --parallel --filter \"./apps/*\" test:unit:ui",
+    "test:coverage": "pnpm --parallel --filter \"./apps/*\" test:coverage",
+    "test:changed": "pnpm --parallel --filter \"./apps/*\" test:changed",
+    "test:e2e": "pnpm --parallel --filter \"./apps/*\" test:e2e",
+    "test:e2e:ui": "pnpm --parallel --filter \"./apps/*\" test:e2e:ui",
+    "test:e2e:headed": "pnpm --parallel --filter \"./apps/*\" test:e2e:headed",
+    "test:all": "pnpm --parallel --filter \"./apps/*\" test:all",
+    "test:ci": "pnpm --parallel --filter \"./apps/*\" test:ci",
+    "test:admin": "pnpm --filter admin test:unit",
+    "test:admin:e2e": "pnpm --filter admin test:e2e",
+    "test:client": "pnpm --filter client test:unit",
+    "test:client:e2e": "pnpm --filter client test:e2e",
+    "clean": "pnpm --recursive exec rm -rf node_modules dist",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.7.4",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": "22.16.0",
+    "pnpm": "10.11.0"
+  }
+}

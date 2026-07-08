@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Itinerary Simulator — itny.js aggregate</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a3340; --dim:#8b97a7;
+    --fg:#e6edf3; --acc:#4493f8; --good:#3fb950; --bad:#f85149; --warn:#d29922; --pend:#a371f7; --rec:#56d4dd;
+    --hh:54px;   /* fixed header height — the sticky rail pins exactly under it (see .col-rail) */
+    --pad:14px;  /* page (.wrap) padding — the rail's pin point = header + this, so it never drifts on first scroll */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 16px;min-height:var(--hh);background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header h1{font-size:15px;margin:0;font-weight:650}
+  header .src{color:var(--dim);font-size:11px}
+  header .sp{flex:1}
+  button{font:inherit;cursor:pointer;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 9px}
+  button:hover:not(:disabled){border-color:var(--acc)}
+  button:disabled{opacity:.42;cursor:not-allowed}
+  .hbtn{padding:5px 11px}
+  select.hbtn{font:inherit;background:var(--panel2);color:var(--fg);border:1px solid var(--acc);border-radius:7px}
+  .wrap{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;padding:var(--pad);max-width:1500px;margin:0 auto}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  /* sticky action rail (wide screens): the right column (pending · actions · payments) follows the page scroll with
+     its own overflow, so the controls stay reachable while reading the long left data column. Pin point is exactly
+     header + page padding, so the rail is fixed from the first scrolled pixel (no drift/jump). */
+  @media(min-width:900px){
+    .col-rail{position:sticky;top:calc(var(--hh) + var(--pad));align-self:start;max-height:calc(100vh - var(--hh) - var(--pad) - 14px);overflow:auto;padding-right:3px}
+    .col-rail::-webkit-scrollbar{width:9px} .col-rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px}
+  .card h2{margin:0 0 9px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:650}
+  /* collapsible card headers — click the title to fold a section away (state persists across renders). Folding
+     declutters without losing anything; audit/reference sections (history, versions, JSON) start folded. */
+  .card h2.chead{cursor:pointer;user-select:none;display:flex;align-items:center;gap:7px}
+  .card h2.chead:hover{color:var(--fg)}
+  .card.collapsed h2.chead{margin-bottom:0}
+  .card h2.chead .cae{color:var(--dim);font-size:9px;flex:0 0 auto;width:9px;text-align:center;transition:transform .12s,color .12s}
+  .card h2.chead:hover .cae{color:var(--acc)}
+  .stepper{display:flex;gap:4px;flex-wrap:wrap}
+  .step{flex:1;min-width:74px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 7px;text-align:center}
+  .step.active{border-color:var(--acc);background:#13233b}
+  .step.done{opacity:.6}
+  .step .s-name{display:block;font-weight:650;font-size:11px}
+  .step .s-sub{display:block;color:var(--dim);font-size:10px}
+  .chips{display:flex;gap:9px;flex-wrap:wrap;align-items:stretch}
+  /* Grounded stat groups: each related cluster (status · trip · money · ops) sits on its own panel with a label
+     segment, so the values read as one cohesive stat bar instead of a scatter of floating pills. */
+  .chipgrp{display:flex;align-items:stretch;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .chipgrp .gl{display:flex;align-items:center;padding:0 9px;background:#0f151f;color:var(--dim);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-right:1px solid var(--line)}
+  .chipgrp .chip{background:transparent;border:none;border-radius:0;padding:5px 11px;display:flex;align-items:baseline;gap:5px}
+  .chipgrp .chip+.chip{border-left:1px solid var(--line)}
+  .chipgrp .chip .k{margin-right:0}
+  /* tight, single-line variant (the pending-change bar): compact padding + no wrapping so it stays on one row */
+  .chipgrp-tight{flex-wrap:nowrap}
+  .chipgrp-tight .chip{padding:4px 8px;white-space:nowrap}
+  .chipgrp-tight .gl{padding:0 8px}
+  /* one-line KPI strip shown in the summary card header when the card is folded — keeps the vital numbers visible */
+  .kpi{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--dim);font-size:12px;margin-top:2px}
+  .kpi .num,.kpi b{color:var(--fg)}
+  .kpisep{color:var(--line)}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px}
+  .chip .k{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-right:4px}
+  .chip.flag{border-color:var(--warn);color:var(--warn)}
+  .num{font-variant-numeric:tabular-nums}
+  .lirow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px}
+  .linm{font-weight:650}
+  .pill{border-radius:5px;padding:2px 7px;font-size:11px;font-weight:650;border:1px solid var(--line)}
+  .arrow{color:var(--warn)}
+  .lflag{background:#2a2410;border:1px solid var(--warn);color:var(--warn);border-radius:5px;padding:1px 6px;font-size:10px}
+  .unit{border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-bottom:7px;cursor:pointer;background:var(--panel2)}
+  .unit:hover{border-color:var(--acc)}
+  .unit.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .unit.extra{margin-left:22px;border-style:dashed}
+  .unit.cancelled{opacity:.5;text-decoration:line-through}
+  .unit .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .unit .nm{font-weight:600}
+  .unit .meta{color:var(--dim);font-size:11px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+  .badge{border-radius:4px;padding:1px 6px;font-size:10px;font-weight:650;border:1px solid}
+  .b-st{border-color:var(--acc);color:var(--acc)}
+  .b-op{border-color:var(--pend);color:var(--pend)}
+  .b-warn{border-color:var(--warn);color:var(--warn)}
+  .b-bad{border-color:var(--bad);color:var(--bad)}
+  .b-good{border-color:var(--good);color:var(--good)}
+  .b-dim{border-color:var(--line);color:var(--dim)}
+  .b-rec{border-color:var(--rec);color:var(--rec)}
+  .b-acc-dashed{border:1px dashed var(--acc);color:var(--acc)}
+  /* Promotions & Discounts — catalog/manual promo cards (panel + item-modal tab) */
+  .promo-card{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:6px;background:var(--panel2);cursor:pointer}
+  .promo-card:hover{border-color:var(--acc)}
+  .promo-card.sel{border-color:var(--good)}
+  .promo-card.nomatch.sel{border-color:var(--warn)}
+  .promo-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .promo-nm{font-weight:600}
+  .promo-grp{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);font-weight:700;margin:8px 0 4px}
+  .promo-sep{border-top:1px dashed var(--line);margin:9px 0 2px}
+  .promo-exp{margin-top:4px;font-size:11px}
+  .promo-exp summary{cursor:pointer;color:var(--dim);font-size:10.5px;list-style:none}
+  .pricedet{margin:4px 0}
+  .pricedet>summary{cursor:pointer;color:var(--acc);font-size:11.5px;font-weight:650;padding:3px 0}
+  .promo-cols{display:flex;gap:16px;margin-top:4px;flex-wrap:wrap}
+  .promo-cols ul{margin:2px 0 0;padding-left:15px}
+  .promo-sub{font-size:9.5px;text-transform:uppercase;color:var(--dim);font-weight:700}
+  .promo-mems{font-size:10.5px;color:var(--dim);margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .promo-mem{border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--fg)}
+  .promo-mem .promo-x{background:none;border:none;color:var(--bad);cursor:pointer;font-size:10px;margin-left:3px;padding:0}
+  .promo-add{margin-top:4px;font-size:10.5px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  /* item-card selected-promotion list (rendered at the end of the row, not as badges) */
+  .upromos{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
+  .upromo{font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;cursor:pointer}
+  .upromo.ok{border-color:var(--good);color:var(--good)}
+  .upromo.no{border-color:var(--warn);color:var(--warn)}
+  /* item-card right column — one badge per pax GROUP allocated to the item, in the group colour, listing its paxes */
+  .urow{display:flex;gap:8px;align-items:flex-start}
+  .umain{flex:1;min-width:0}
+  /* compact pax-group chips: one per group on a coloured left bar — group name + count header, then tag + full name
+     per traveller (tag in the group colour, name dim, truncated). Leaner than a bordered box but still shows who's who. */
+  .ugroups{display:flex;flex-direction:column;gap:4px;flex:0 0 auto;max-width:190px}
+  .ugrp{border-left:3px solid var(--gc);border-radius:0 4px 4px 0;padding:2px 7px;font-size:10px;line-height:1.4;background:var(--panel)}
+  .ugrp .ugh{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--gc)}
+  .ugrp .ugh .ugn{color:var(--dim);font-variant-numeric:tabular-nums}
+  .ugrp .ugh .ugck{color:#3aa564;font-weight:700}
+  .ugrp .ugpx{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:176px}
+  .ugrp .ugt{color:var(--gc);font-weight:600}
+  /* document viewer line-item tables (Quote / Invoice / FCA) */
+  .doctbl{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:4px}
+  .doctbl th{color:var(--dim);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;text-align:left;font-weight:700;padding:3px 6px;border-bottom:1px solid var(--line)}
+  .doctbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  .doctbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .doctbl .c2-sup{color:var(--dim);font-size:10px}
+  .doctbl .c2-nm{font-weight:600}
+  .doctbl .c2-disc,.doctbl .c2-pax{margin:2px 0 0;padding:0 0 0 13px;list-style:disc;color:var(--dim);font-size:10.5px}
+  .doctbl .c2-pax{color:var(--fg)}
+  .doctbl .pxcmt{color:var(--rec)}
+  .doctbl input[type=checkbox]{pointer-events:none}
+  /* Services & extras panel — the pax × date allocation grid (sits between Add service and the line list) */
+  .tabs{display:flex;gap:4px;margin-bottom:9px}
+  .aggrid-wrap{overflow:auto;max-width:100%;margin:0 0 13px}
+  .aggrid tbody tr{cursor:pointer}
+  .aggrid tbody tr:hover th.agpx,.aggrid tbody tr:hover td{background:#13233b}
+  /* a line card lit up because its pax is hovered in the allocation grid */
+  .unit.paxhi{border-color:var(--good);box-shadow:0 0 0 1px var(--good);background:#10251a}
+  .aggrid{border-collapse:collapse;font-size:11px;width:100%}
+  .aggrid th,.aggrid td{border:1px solid var(--line);padding:3px 7px;text-align:center}
+  .aggrid th.agdt{width:auto}
+  .aggrid th.agpx{text-align:left;white-space:nowrap;position:sticky;left:0;background:var(--panel);z-index:1;width:1%}
+  .aggrid th.agdt{font-variant-numeric:tabular-nums;color:var(--dim);font-weight:700;font-size:10px}
+  .aggrid .agtag{font-weight:700}
+  .aggrid .agnm{color:var(--dim);font-size:10px}
+  /* night columns sit BETWEEN day columns — a narrow, dimmed band; a covered night still shows a green ✓ via agok below */
+  .aggrid th.agnt{color:var(--dim);font-weight:700;font-size:11px;background:#0f151f;width:1%;padding:3px 4px}
+  .aggrid td.agnite{background:#0f151f;color:var(--dim);font-weight:700;font-size:10px;width:1%;padding:3px 4px}
+  .aggrid td.agok{color:var(--good);font-weight:700}
+  .aggrid td.agno{color:var(--bad);font-weight:700}
+  /* per-traveller route TRACK row, column-aligned under the matrix: stay bars + transfer nodes + gap markers */
+  .aggrid tr.agroute td.agtrk{padding:0;border-left:none;border-right:none;border-top:none;height:18px;background:var(--panel)}
+  .aggrid tr.agroute th.agrh{background:var(--panel);border-top:none}
+  .aggrid .trk{position:relative;height:16px;display:flex;align-items:center;justify-content:center}
+  .aggrid .trk::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:#23324a}
+  .aggrid .trkbar{position:absolute;left:0;right:0;top:4px;bottom:4px;background:linear-gradient(#2c7a4b,#1c5e34);cursor:pointer}
+  .aggrid .trkbar.rl{left:3px;border-radius:7px 0 0 7px} .aggrid .trkbar.rr{right:3px;border-radius:0 7px 7px 0} .aggrid .trkbar.rl.rr{border-radius:7px}
+  .aggrid .trkbar:hover{filter:brightness(1.25)}
+  .aggrid .trkloc{position:absolute;left:6px;top:50%;transform:translateY(-50%);z-index:2;font-size:9px;font-weight:700;letter-spacing:.04em;color:#eafff1;white-space:nowrap;pointer-events:none}
+  .aggrid .trknode{position:relative;z-index:3;width:15px;height:15px;border-radius:50%;background:#3d7ec0;color:#fff;font-size:10px;line-height:15px;text-align:center;cursor:pointer;box-shadow:0 0 0 2px var(--panel)}
+  .aggrid .trknode:hover{background:var(--acc)}
+  .aggrid .trkgap{position:relative;z-index:3;width:15px;height:15px;border-radius:50%;background:#7a2330;color:#ffd9d9;font-size:11px;font-weight:700;line-height:15px;text-align:center;box-shadow:0 0 0 2px var(--panel)}
+  /* Route GRAPH panel — itinerary journey as a Mermaid gitGraph (travellers = branches, stops = commits) */
+  .rgmermaid{margin:0 0 8px;padding:10px;background:#0f151f;border:1px solid var(--line);border-radius:8px;overflow:auto;text-align:center}
+  .rgmermaid svg{max-width:100%;height:auto}
+  /* day-coverage table inside a Mermaid stay node — styled by CLASS so the HTML label carries no inline styles
+     (Mermaid's label sanitizer mangles inline style attributes; class rules from this sheet apply to the foreignObject) */
+  /* coverage table sits inside the indigo stay node; chrome is neutral so only the COVERED cells read green */
+  .rgtbl{border-collapse:collapse;margin:0 auto;font-size:9px}
+  .rgtbl caption{padding:1px 0 3px;color:#ece4ff;font-weight:600;white-space:nowrap}
+  .rgtbl th{padding:0 3px;color:#c9c2e6;font-weight:500;white-space:nowrap}
+  .rgtbl th.rgrl{text-align:left;padding:0 5px 0 0;color:#ece4ff}
+  .rgtbl td{width:13px;height:10px;border:1px solid #4a3f6b;background:#1a1530}
+  .rgtbl td.rgon{background:#3fb950;border-color:#2f8f3d}
+  .rgsrc{font:10px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--dim);white-space:pre;overflow:auto;max-height:220px;text-align:left}
+  .rgkey{font-size:11px;color:var(--dim);margin:0 0 9px;display:flex;flex-wrap:wrap;gap:3px 12px}
+  .rgkey b{color:var(--fg);font-weight:650}
+  .rglegend{font-size:10px;color:var(--dim);margin:0 0 13px}
+  .ribbon-lbl{text-align:left;white-space:nowrap;font-size:11px}
+  .actgrp{margin-bottom:13px}
+  .actgrp .ah{font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px;font-weight:700;color:var(--dim)}
+  .grp-build .ah,.grp-lifecycle .ah,.grp-transition .ah{color:var(--acc)} .grp-changeStart .ah,.grp-changeCycle .ah,.grp-change .ah{color:var(--pend)}
+  .grp-terminal .ah,.grp-flags .ah{color:var(--warn)} .grp-documents .ah,.grp-payments .ah{color:var(--dim)}
+  .actsep{height:1px;background:#1c2230;margin:6px 2px}
+  .act{display:flex;gap:8px;align-items:center;padding:2px 9px;border:1px solid var(--line);border-radius:7px;margin-bottom:5px;background:var(--panel2);font-size:12px}
+  .act.ok{cursor:pointer}
+  .act.ok:hover{border-color:var(--acc)}
+  .act .mk{flex-shrink:0;width:14px;text-align:center}
+  .act.ok .mk{color:var(--good)} .act.no .mk{color:var(--bad)}
+  .act .lbl{flex:1;font-weight:600} .act.no .lbl{color:var(--dim);font-weight:500}
+  .act .rid{font-size:9px;color:var(--dim)}
+  .act .info{flex-shrink:0;cursor:help;font-size:12px}
+  .act.ok .info{color:var(--good)} .act.no .info{color:var(--warn)}
+  .op{font-size:9px;font-weight:700;border-radius:4px;padding:1px 6px}
+  .op-ADD{background:#10331c;color:var(--good)} .op-MODIFY{background:#241a3a;color:var(--pend)}
+  .op-CANCEL{background:#332710;color:var(--warn)} .op-REMOVE{background:#3a1414;color:var(--bad)}
+  .idetail{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+  .idetail .kv{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dotted var(--line);font-size:12px}
+  .idetail .kv:last-child{border:none}
+  .idetail .kv .k{color:var(--dim)}
+  /* commercial triple */
+  .triple{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+  .tcell{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#0f1620}
+  .tcell .tk{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .tcell .tv{font-weight:650;font-variant-numeric:tabular-nums}
+  .tcell .tver{font-size:10px;color:var(--acc);font-weight:600;margin-left:3px}
+  .tcell .ts{font-size:10px;color:var(--dim)}
+  .tcell .tfp{font-size:10px;color:var(--dim);margin-top:3px;padding-top:3px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .recban{border-radius:6px;padding:6px 9px;font-weight:650;font-size:12px;border:1px solid var(--rec);color:var(--rec);background:#0c2226;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .rec-NeedsRequest{border-color:var(--acc);color:var(--acc);background:#0d1b2e}
+  .rec-AwaitingSupplier{border-color:var(--warn);color:var(--warn);background:#221a08}
+  .rec-NeedsDecision{border-color:var(--bad);color:var(--bad);background:#2a0f0f}
+  .rec-Rejected{border-color:var(--bad);color:var(--bad);background:#2a0f0f}
+  .rec-Booked{border-color:var(--good);color:var(--good);background:#0c2114}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:60;align-items:center;justify-content:center}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:11px;width:min(440px,92vw);box-shadow:0 14px 50px rgba(0,0,0,.5);display:flex;flex-direction:column;max-height:94vh}
+  .modal.modal-wide{width:min(980px,96vw)}
+  .mhead{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .mhead .mt{font-weight:650;font-size:14px}
+  .mhead .close{background:transparent;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:0 4px}
+  .mhead .close:hover{color:var(--bad)}
+  .mbody{padding:16px;min-height:0;flex:1 1 auto;overflow:auto}
+  #imodal{align-items:flex-start;justify-content:center;padding:3vh 0 160px}
+  #imodal .modal{max-height:calc(100vh - 175px)}
+  .mbody.msplit{display:flex;padding:0;overflow:hidden}
+  .mcol{min-height:0;overflow:auto;padding:14px 16px}
+  .mcol-left{flex:0 0 46%;border-right:1px solid var(--line)}
+  .mcol-right{flex:1 1 auto}
+  @media(max-width:640px){ .mbody.msplit{flex-direction:column} .mcol-left{flex:none;border-right:none;border-bottom:1px solid var(--line)} }
+  .dlg-msg{margin-bottom:12px;line-height:1.5;white-space:pre-wrap;color:var(--dim);font-size:12px}
+  .field{margin-bottom:11px}
+  .field label{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .field input[type=text],.field input[type=number],.field input[type=date],.field select{width:100%;font:inherit;background:var(--panel2);color:var(--fg);border:1px solid var(--acc);border-radius:7px;padding:7px 9px}
+  .field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7}
+  .field .checks{display:flex;gap:8px;flex-wrap:wrap}
+  .field .checks label{display:inline-flex;gap:5px;align-items:center;text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
+  .dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+  button.primary{background:#13233b;border-color:var(--acc);color:var(--fg);padding:6px 16px}
+  button.ghost{background:transparent}
+  /* demo-clock timeline: proportional before/travel/after zones over a day-linear range slider */
+  .datebar{display:flex;height:26px;border-radius:6px;overflow:hidden;border:1px solid var(--line);font-size:9px;font-weight:700;margin-bottom:6px}
+  .datebar .dz{display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;padding:0 4px;white-space:nowrap;overflow:hidden;min-width:0}
+  .datebar .dz-before{background:#274060} .datebar .dz-travel{background:#1f6b3a} .datebar .dz-after{background:#6b4a1f}
+  .dateslider{width:100%;accent-color:var(--acc);margin:0 0 2px}
+  #hoverbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%) translateY(10px);
+    width:min(700px,92vw);background:var(--panel);border:1px solid var(--acc);border-radius:11px;
+    box-shadow:0 12px 44px rgba(0,0,0,.55);padding:11px 18px;z-index:80;opacity:0;pointer-events:none;
+    transition:opacity .13s ease, transform .13s ease}
+  #hoverbar.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #hoverbar .hb-head{font-size:13px;margin-bottom:3px}
+  #hoverbar .hb-head .rid{color:var(--dim);font-size:10px;margin-left:5px}
+  #hoverbar .hb-pc{font-size:12px;color:var(--fg);line-height:1.5}
+  #hoverbar .hb-oc{font-size:12px;color:var(--dim);line-height:1.5}
+  #hoverbar .hb-why{font-size:11px;margin-top:3px}
+  #hoverbar .hb-why.ok{color:var(--good)} #hoverbar .hb-why.no{color:var(--bad)}
+  /* per-action checklist: every gate + rule check, not just the first blocker */
+  .hb-checks{list-style:none;margin:5px 0 0;padding:5px 0 0;border-top:1px solid var(--line);font-size:11px;line-height:1.5}
+  .hb-checks li{display:flex;gap:6px;align-items:baseline}
+  .hb-checks li .ck-mk{flex:0 0 auto;width:12px;text-align:center;font-weight:700}
+  .hb-checks li.ok .ck-mk{color:var(--good)} .hb-checks li.no .ck-mk{color:var(--bad)} .hb-checks li.cond .ck-mk{color:var(--warn)}
+  .hb-checks li.no{color:var(--fg)} .hb-checks li.ok,.hb-checks li.cond{color:var(--dim)}
+  .hb-checks li b{color:var(--fg);font-weight:600}
+  .paxchip{display:inline-flex;gap:6px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 6px 3px 10px;font-size:12px}
+  .paxchip.pending{border-color:var(--pend)}
+  .paxchip.remove{border-color:var(--bad);text-decoration:line-through;opacity:.7}
+  .paxchip .x{cursor:pointer;color:var(--dim);border:none;background:none;padding:0 3px;font-size:14px}
+  .paxchip .x:hover{color:var(--bad)}
+  .paxchip .x.dis{cursor:not-allowed;color:var(--line);opacity:.5}
+  /* traveller cards — 6 per row, compact 2-row cards, a left accent colour per pax GROUP */
+  .paxcards{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}
+  .paxcard{flex:0 0 calc((100% - 30px)/6);box-sizing:border-box;min-width:0;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:6px;padding:5px 7px;position:relative;font-size:11px}
+  .paxcard.pending{border-color:var(--pend)} .paxcard.remove{opacity:.6;text-decoration:line-through}
+  .paxcard .pc1{display:flex;align-items:center;gap:5px;flex-wrap:wrap;line-height:1.3}
+  .paxcard .ptag{font-weight:700;letter-spacing:.02em}
+  .paxcard .pgrp{font-weight:600}
+  .paxcard .page{color:var(--dim)}
+  .paxcard .pc2{margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .paxcard .pcx{position:absolute;top:2px;right:3px;cursor:pointer;color:var(--dim);border:none;background:none;padding:0 2px;font-size:12px;line-height:1}
+  .paxcard .pcx:hover{color:var(--bad)}
+  .paxcard .pced{cursor:pointer;color:var(--dim);border:none;background:none;padding:0;font-size:11px}
+  .paxcard .pced:hover{color:var(--acc)}
+  @media(max-width:900px){ .paxcard{flex:0 0 calc((100% - 18px)/4)} }
+  @media(max-width:560px){ .paxcard{flex:0 0 calc((100% - 6px)/2)} }
+  .pend-row{border:1px solid var(--line);border-radius:6px;padding:7px 9px;margin-bottom:6px;font-size:12px}
+  .hrow{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin-bottom:5px;font-size:12px}
+  .hrow .hgrow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hrow .badge{flex-shrink:0}
+  .hbtn-sm{flex-shrink:0;font-size:10px;padding:2px 8px;min-width:84px;text-align:center}
+  .pend-row .ptop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .diff{color:var(--dim);font-size:11px;margin-top:3px}
+  .diff .o{color:var(--bad)} .diff .n{color:var(--good)}
+  /* a simplified diff value with the full before/after one hover away (native title) */
+  .dhint{border-bottom:1px dotted var(--dim);cursor:help}
+  .disp{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .disp .db{font-size:10px;border:1px solid var(--line);border-radius:5px;padding:2px 7px;cursor:pointer;color:var(--dim)}
+  .disp .db:hover{border-color:var(--acc)}
+  .disp .db.on{font-weight:700}
+  .disp .db.INLINE.on{background:#13325a;border-color:var(--acc);color:#fff}
+  .disp .db.CHARGE.on{background:#3a2a10;border-color:var(--warn);color:var(--warn)}
+  .disp .db.NEEDS_APPROVAL.on{background:#241a3a;border-color:var(--pend);color:var(--pend)}
+  .disp .db.WAIVE.on{background:#10331c;border-color:var(--good);color:var(--good)}
+  .log{max-height:260px;overflow:auto;font-size:11px}
+  .logrow{display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #1c2230}
+  .logrow .t{color:var(--dim);font-variant-numeric:tabular-nums}
+  .logrow .a{color:var(--acc);min-width:58px}
+  .vrow{border-bottom:1px solid #1c2230;padding:2px 0}
+  .vrow>summary{cursor:pointer;display:flex;gap:8px;align-items:center}
+  .vrow>summary .t{color:var(--acc);font-variant-numeric:tabular-nums;min-width:34px}
+  .vrow>summary .a{color:var(--dim);font-variant-numeric:tabular-nums}
+  pre.vjson{background:#0a0d12;border:1px solid var(--line);border-radius:7px;padding:8px;margin:6px 0 2px;overflow:auto;max-height:300px;font:10px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+  .tabs{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+  .tabs button.on{border-color:var(--acc);color:var(--acc)}
+  pre.json{background:#0a0d12;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;max-height:420px;font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+  a{color:var(--acc)}
+  .hint{color:var(--dim);font-size:11px}
+  /* view config overlay */
+  #cfg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:90;overflow:auto}
+  #cfg .sheet{max-width:1100px;margin:24px auto;background:var(--panel);border:1px solid var(--line);border-radius:11px}
+  #cfg .chead{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+  #cfg .cbody{padding:16px 18px}
+  #cfg h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:18px 0 8px}
+  #cfg table{border-collapse:collapse;width:100%;font-size:12px}
+  #cfg td,#cfg th{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  #cfg th{color:var(--dim);font-weight:600}
+  #cfg .cat{display:inline-block;font-size:9px;font-weight:700;border-radius:4px;padding:1px 6px;border:1px solid var(--line)}
+  #cfg .cat-itny{color:var(--acc);border-color:var(--acc)} #cfg .cat-item{color:var(--warn);border-color:var(--warn)} #cfg .cat-pendingChanges{color:var(--pend);border-color:var(--pend)} #cfg .cat-voucher{color:var(--rec);border-color:var(--rec)}
+  /* view-catalogue scope chips (getViews) — itinerary reuses the itny accent */
+  #cfg .cat-itinerary{color:var(--acc);border-color:var(--acc)} #cfg .cat-pax{color:var(--rec);border-color:var(--rec)} #cfg .cat-change{color:var(--pend);border-color:var(--pend)}
+  #cfg details{margin-top:4px}
+  #cfg details summary{cursor:pointer;color:var(--dim);font-size:11px}
+  #cfg pre.src{background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;font:10px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre;margin:6px 0 0;max-height:300px}
+  .kbd{font:11px ui-monospace,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  /* compact density (header toggle, remembered) — tightens paddings + type for smaller laptops */
+  body.compact{font-size:12px}
+  body.compact .card{padding:9px}
+  body.compact .card h2{margin-bottom:7px}
+  body.compact .chipgrp .chip{padding:3px 9px}
+  body.compact .unit{padding:6px 8px;margin-bottom:5px}
+  body.compact .act{padding:1px 8px;margin-bottom:4px}
+  body.compact{--pad:11px}
+  body.compact .wrap{gap:11px}
+  body.compact .col{gap:11px}
+  /* item-modal left pane: section TABS so its six blocks don't all stack at once (all kept in the DOM, only the
+     active one shown — nothing removed). The right pane (status + actions) is unaffected. */
+  .mtabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 10px;position:sticky;top:0;background:var(--panel);padding-bottom:6px;z-index:1}
+  .mtabs button{font-size:11px;padding:4px 9px}
+  .mtabs button.on{border-color:var(--acc);color:var(--acc)}
+  .mtab{animation:mtabin .12s ease}
+  @keyframes mtabin{from{opacity:.3}to{opacity:1}}
+</style>
+<!-- Route-graph tab renders a Mermaid flowchart; vendored locally (lab/mermaid.min.js) so it works fully offline / on
+     file://. Guarded everywhere so the rest of the simulator still runs if the library is absent (e.g. headless). -->
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Itinerary Simulator</h1>
+  <span class="src" id="srcinfo"></span>
+  <span class="sp"></span>
+  <span id="userpick"></span>
+  <span id="agencypick"></span>
+  <button class="hbtn" onclick="setCurrentDate()" id="dateBtn">🕑 Set date</button>
+  <button class="hbtn" onclick="doBrochure()">🔖 Create Brochure</button>
+  <select class="hbtn" id="resetSel" title="Reset to a starting scenario" onchange="doScenario(this.value); this.selectedIndex=0">
+    <option value="">↻ Reset…</option>
+    <option value="empty">Empty</option>
+    <option value="default">Default</option>
+    <option value="quoted">Quoted</option>
+    <option value="invoiced">Invoiced</option>
+    <option value="invoicedPaid">Invoiced + Paid</option>
+    <option value="vouchered">Vouchered</option>
+    <option value="completed">Completed</option>
+    <option value="huge">Huge</option>
+    <option value="extreme">Extreme</option>
+  </select>
+  <button class="hbtn" onclick="saveItny()" title="Save the full itinerary state to a .json file">💾 Save</button>
+  <button class="hbtn" onclick="loadItnyPick()" title="Load a full itinerary state from a .json file">📂 Load</button>
+  <input type="file" id="itnyFile" accept=".json,application/json" style="display:none" onchange="loadItnyFile(this.files&&this.files[0]); this.value='';">
+  <button class="hbtn" id="foldBtn" onclick="toggleAllCards()" title="Collapse / expand every section">⤡ Fold all</button>
+  <button class="hbtn" onclick="openConfig()">⚙ View config</button>
+  <a class="hbtn" style="text-decoration:none" href="itny.lifecycle.html">📖 Lifecycles</a>
+</header>
+
+<div id="app"></div>
+
+<div id="hoverbar"></div>
+
+<!-- generic schema-driven input form (replaces native prompt/confirm) -->
+<div class="modal-bg" id="formModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mt" id="fmTitle">Input</div><button class="close" onclick="fmClose(false)">✕</button></div>
+    <div class="mbody">
+      <div class="dlg-msg" id="fmMsg"></div>
+      <div id="fmFields"></div>
+      <div class="dlg-btns">
+        <button class="ghost" onclick="fmClose(false)">Cancel</button>
+        <button class="primary" id="fmOk" onclick="fmClose(true)">Run</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- demo clock: pick "today" on a before-travel / travel / after-travel timeline slider -->
+<div class="modal-bg" id="dateModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mt">Set demo &ldquo;today&rdquo;</div><button class="close" onclick="closeDateModal()">✕</button></div>
+    <div class="mbody">
+      <div class="dlg-msg" id="dmMsg"></div>
+      <div class="field"><label>Date</label><input type="date" id="dmDate" oninput="dmFromDate()"></div>
+      <div class="field"><label>Days before travel (timeline start)</label><input type="number" id="dmBefore" min="1" step="1" oninput="dmSetBefore()"></div>
+      <div id="dmBar" class="datebar"></div>
+      <input type="range" id="dmSlider" class="dateslider" oninput="dmFromSlider()">
+      <div class="dlg-msg" id="dmReadout" style="margin:8px 0 2px"></div>
+      <div class="dlg-btns">
+        <button class="ghost" onclick="closeDateModal()">Cancel</button>
+        <button class="ghost" onclick="dmReset()">Reset to default</button>
+        <button class="primary" onclick="closeDateModal(true)">Set date</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- save itinerary: name the .json file before download -->
+<div class="modal-bg" id="saveModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mt">Save itinerary</div><button class="close" onclick="closeSaveModal()">✕</button></div>
+    <div class="mbody">
+      <div class="dlg-msg">Saves the full itinerary state (every item, supplier, payment, change &amp; document) to a JSON file.</div>
+      <div class="field"><label>File name</label><input type="text" id="saveName" onkeydown="if(event.key==='Enter')closeSaveModal(true)"></div>
+      <div class="dlg-btns">
+        <button class="ghost" onclick="closeSaveModal()">Cancel</button>
+        <button class="primary" onclick="closeSaveModal(true)">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- load error: the picked file was not a parseable itinerary snapshot -->
+<div class="modal-bg" id="loadErrModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mt">Could not parse</div><button class="close" onclick="closeLoadErr()">✕</button></div>
+    <div class="mbody">
+      <div class="dlg-msg" id="loadErrMsg">The selected file is not a valid itinerary JSON. Showing the default itinerary.</div>
+      <div class="dlg-btns">
+        <button class="primary" onclick="closeLoadErr()">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- load version check: the file was saved with a different simulator version -->
+<div class="modal-bg" id="verConfirmModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mt">Version mismatch</div><button class="close" onclick="closeVerConfirm(false)">✕</button></div>
+    <div class="mbody">
+      <div class="dlg-msg" id="verConfirmMsg"></div>
+      <div class="dlg-btns">
+        <button class="ghost" onclick="closeVerConfirm(false)">Cancel</button>
+        <button class="primary" onclick="closeVerConfirm(true)">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- read-only domain reference -->
+<div id="cfg"><div class="sheet">
+  <div class="chead"><b>View config — domain reference (read-only)</b><span class="sp" style="flex:1"></span>
+    <span class="hint" id="cfgmeta"></span><button class="hbtn" onclick="closeConfig()">✕ Close</button></div>
+  <div class="cbody" id="cfgbody"></div>
+</div></div>
+
+<script src="itny.js"></script>
+<script>
+/* ===== thin view over the itny.js aggregate. NO business logic lives here. ===== */
+const CFG = ITNY.CONFIG;
+let itn = Itinerary.create();
+let modalUnitId = null;     // open item modal
+let itemTab = 'details';    // item modal left-pane active tab: details | commercial | holds | discounts | documents
+let modalVoucherId = null;  // open voucher modal
+let modalDocId = null;      // open document modal — { kind:'quotes'|'invoices'|'fcas', id }
+let modalPromoId = null;    // open promotion-details modal (by promo id)
+let jsonTab = 'dbDocument';
+let gridTab = 'none';        // Services panel grid view: 'none' (hidden, default) | 'alloc' (checkbox matrix) | 'ribbon' (route track) | 'graph' (flowchart)
+let _rgDef1 = null;          // last-built Mermaid source for the route graph
+let _rgSeq = 0;              // monotonic id for mermaid.render (it caches by id, so each draw needs a fresh one)
+let _rgNodeItems = {};       // route-graph node id (n0, n1…) → the item id it represents (for click-to-open)
+let _mermaidInit = false;
+// Collapsible cards (progressive disclosure). `collapsed` holds the folded section keys; it persists across renders
+// so folding survives every action. Audit/reference sections start folded — everything is one click from open.
+// localStorage is absent in the headless harness — guard every access so script eval never throws there.
+function _lsGet(k){ try{ return typeof localStorage!=='undefined'?localStorage.getItem(k):null; }catch(e){ return null; } }
+function _lsSet(k,v){ try{ if(typeof localStorage!=='undefined') localStorage.setItem(k,v); }catch(e){} }
+const collapsed = new Set((()=>{ const raw=_lsGet('itny.collapsed'); if(raw){ try{ const a=JSON.parse(raw); if(Array.isArray(a)) return a; }catch(e){} } return ['history','versions','json']; })());
+// Every foldable section key (left + right column) — drives the header Fold-all / Unfold-all toggle.
+const ALL_CARDS = ['summary','travellers','services','suppliers','promotions','documents','history','versions','json','actions','payments'];
+function _saveCollapsed(){ _lsSet('itny.collapsed', JSON.stringify([...collapsed])); }
+function toggleCard(k){ collapsed.has(k)?collapsed.delete(k):collapsed.add(k); _saveCollapsed(); render(); }
+// Header control: if anything is open, fold everything; otherwise unfold everything.
+function toggleAllCards(){ if(ALL_CARDS.some(k=>!collapsed.has(k))) ALL_CARDS.forEach(k=>collapsed.add(k)); else collapsed.clear(); _saveCollapsed(); render(); }
+// Render a foldable card: a clickable header (chevron + title + optional raw-HTML hint) over the body. When folded the
+// body is omitted; an optional `foldedPreview` (e.g. the summary KPI strip) renders in its place so nothing vital hides.
+function card(key,title,body,hint,foldedPreview){
+  const open=!collapsed.has(key);
+  return `<div class="card${open?'':' collapsed'}"><h2 class="chead" onclick="toggleCard('${key}')"><span class="cae">${open?'▾':'▸'}</span>${title}${hint?' '+hint:''}</h2>${open?body:(foldedPreview||'')}</div>`;
+}
+// Compact / comfortable density. Forced to compact for now (the header toggle is hidden); the toggle is kept so it
+// can be re-enabled later by restoring the densBtn button and seeding `_density` from `_lsGet('itny.density')`.
+let _density='compact';
+function toggleDensity(){ _density=(_density==='compact')?'comfortable':'compact'; _lsSet('itny.density',_density); render(); }
+// The header wraps on narrow widths, so its height varies — measure it and feed --hh, keeping the sticky rail pinned
+// exactly under it (the no-drift math). Guarded so the headless harness (no real DOM) is a no-op.
+function updateHH(){
+  try{ const h=document.querySelector&&document.querySelector('header');
+    if(h&&h.offsetHeight&&document.documentElement&&document.documentElement.style) document.documentElement.style.setProperty('--hh', h.offsetHeight+'px'); }catch(e){}
+}
+// Hovering a traveller in the allocation grid lights up every line card that traveller is allocated to.
+// Pure DOM toggle (no render) so the hover state survives; matches units by the space-joined data-paxids tokens.
+function paxHover(id){
+  document.querySelectorAll('.unit.paxhi').forEach(el=>el.classList.remove('paxhi'));
+  if(!id) return;
+  document.querySelectorAll('.unit[data-paxids~="'+id+'"]').forEach(el=>el.classList.add('paxhi'));
+}
+
+/* ---------- helpers (presentation only) ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function $(id){ return document.getElementById(id); }
+function paxName(id){ const p=itn.pax.find(x=>x.id===id); return p?p.name:id; }
+const stBadge = st => ({CONFIRMED:'b-good',CANCELLED:'b-bad',NEW:'b-dim'}[st]||'b-st');
+const OPSYM={ADD:'+ADD',MODIFY:'~MODIFY',CANCEL:'⊘CANCEL',REMOVE:'✗REMOVE'};
+function acts(){ return itn.getActions(); }
+function actById(id){ return acts().find(a=>a.id===id); }
+
+/* ---------- special UI-known methods: happy path + reset ---------- */
+// The happy path no longer has a header button (use Reset… → Completed) — but the headless wiring check still drives
+// it through this function, and `_running` is shared with the Reset dropdown, so both stay. `demoBtn` may be absent.
+let _running=false;
+async function runHappyPath(){
+  if(_running) return; _running=true;
+  const btn=$('demoBtn'); if(btn){ btn.disabled=true; btn.textContent='▶ running…'; }
+  try{ await itn.happyPath(); } finally { _running=false; if(btn){ btn.disabled=false; btn.textContent='▶ Auto happy-path'; } }
+  modalUnitId=null; render();
+}
+function doReset(){ itn.reset(); modalUnitId=null; render(); }
+// Reset dropdown → load a starting scenario (some presets drive the happy path, so this is async). Disabled while loading.
+async function doScenario(name){
+  if(!name || _running) return; _running=true;
+  const sel=$('resetSel'); if(sel) sel.disabled=true;
+  try{ await itn.loadScenario(name); } finally { _running=false; if(sel) sel.disabled=false; }
+  modalUnitId=null; render();
+}
+// Create Brochure — reset to a fresh DRAFT brochure (DRAFT↔PREPARED only until converted). Reset stays a BOOKING.
+function doBrochure(){ itn.resetAsBrochure(); modalUnitId=null; render(); }
+
+/* ---------- save / load full itinerary state (JSON file) ---------- */
+// Default file name: YYYYMMDDhhmm-itny-x.y.json (local time, zero-padded; x.y = simulator version).
+function defaultSaveName(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}-itny-${Itinerary.version}.json`;
+}
+// Save: open the name modal pre-filled with the default name (the actual download happens on confirm).
+function saveItny(){ $('saveName').value=defaultSaveName(); $('saveModal').style.display='flex';
+  setTimeout(()=>{ const f=$('saveName'); if(f){ f.focus(); f.select(); } },0); }
+function closeSaveModal(commit){
+  if(commit===true){
+    let name=($('saveName').value||'').trim()||defaultSaveName();
+    if(!/\.json$/i.test(name)) name+='.json';
+    const blob=new Blob([itn.serialize(true)],{type:'application/json'});
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),0);
+  }
+  $('saveModal').style.display='none';
+}
+// Load: trigger the hidden file picker.
+function loadItnyPick(){ const f=$('itnyFile'); if(f) f.click(); }
+// A file was picked — read it. If its recorded simulator version differs from this build (or is missing) we confirm
+// before continuing; otherwise we load straight away. Any failure (unreadable / not parseable / not an itinerary
+// snapshot) shows the "could not parse" modal; its OK resets to the default itny.
+function loadItnyFile(file){
+  if(!file) return;
+  const rdr=new FileReader();
+  rdr.onerror=()=>showLoadErr();
+  rdr.onload=()=>{
+    const text=String(rdr.result);
+    const fileVer=Itinerary.snapshotVersion(text);        // null if unparseable / unstamped
+    if(fileVer!==Itinerary.version){ askVersion(fileVer, text); return; }   // cross-version (or no version) → confirm first
+    applyLoad(text);
+  };
+  rdr.readAsText(file);
+}
+// Apply a load: hand the text to the aggregate; any parse/validation failure surfaces the "could not parse" modal.
+function applyLoad(text){ try{ itn.loadFromJSON(text); modalUnitId=null; render(); }catch(e){ showLoadErr(); } }
+// Version mismatch — ask the user before loading. The pending text is held until they choose.
+let _pendingLoadText=null;
+function askVersion(fileVer, text){
+  _pendingLoadText=text;
+  $('verConfirmMsg').textContent=fileVer
+    ? `This file was saved with simulator version ${fileVer}, but this simulator is version ${Itinerary.version}. Continue loading?`
+    : `This file has no simulator version recorded (this simulator is version ${Itinerary.version}). Continue loading?`;
+  $('verConfirmModal').style.display='flex';
+}
+function closeVerConfirm(go){
+  $('verConfirmModal').style.display='none';
+  const text=_pendingLoadText; _pendingLoadText=null;
+  if(go===true && text!=null) applyLoad(text);             // Cancel just aborts — the current itinerary is untouched
+}
+function showLoadErr(){ $('loadErrModal').style.display='flex'; }
+// OK on the error modal → show the default itinerary (per spec) and close.
+function closeLoadErr(){ $('loadErrModal').style.display='none'; itn.reset(); modalUnitId=null; render(); }
+// Header user picker — one option per role (SP first/default); switching drives role-gated actions (e.g. Unlock = FIN only).
+function userSelectHTML(){
+  const p=itn.projection(); const cur=p.currentUser||{};
+  const opts=(p.availableUsers||[]).map(u=>`<option value="${esc(u.name)}" ${u.name===cur.name?'selected':''}>${esc(u.name)} · ${u.role}</option>`).join('');
+  return `<label class="hint" style="display:flex;align-items:center;gap:5px">👤 <select class="hbtn" style="padding:4px 6px" onchange="doSetUser(this.value)">${opts}</select></label>`;
+}
+function doSetUser(name){ _lsSet('itny.user', name); itn.setCurrentUser(name); render(); }
+// Header agency/agent picker — each agency carries its own CPS margin + TC commission; selecting one drives the price
+// engine (margin + TC used in every line's sell calc). A brochure has no agency, so the picker hides.
+function agencySelectHTML(){
+  if(itn.isBrochure()) return '';
+  const ags=CFG.agencies||[], cur=itn.agencyAgent;
+  const opts=ags.map(a=>`<option value="${esc(a.id)}"${a.id===cur?' selected':''}>${esc(a.id)} (${a.margin}%${a.tc?(' + TC '+a.tc+'%'):''})</option>`).join('');
+  const extra=(cur&&!ags.some(a=>a.id===cur))?`<option value="${esc(cur)}" selected>${esc(cur)}</option>`:'';   // a non-preset agent set via Convert
+  return `<label class="hint" style="display:flex;align-items:center;gap:5px">🏢 <select class="hbtn" style="padding:4px 6px" onchange="doSetAgency(this.value)">${extra}${opts}</select></label>`;
+}
+function doSetAgency(name){ _lsSet('itny.agency', name); itn.setAgency(name); render(); }
+/* demo clock: pick "today" on a before-travel / travel / after-travel timeline slider (drives changeCurrentDate).
+   The slider is day-LINEAR (1px ≈ same number of days everywhere), so the zone bar above it is sized by day-count:
+   before-travel (a configurable window, default DM_BEFORE_DEFAULT days), then the travel window, then a single day after. */
+const DM_BEFORE_DEFAULT=80;     // default "days before travel" the timeline starts at (editable in the modal)
+let _dm=null;
+function setCurrentDate(){
+  const t=itn.summary().travel;
+  const toMs=iso=>{const a=String(iso).split('-').map(Number);return Date.UTC(a[0],a[1]-1,a[2]);};
+  const fromMs=ms=>new Date(ms).toISOString().slice(0,10);
+  const DAY=86400000, hasSpan=(t.start!=null&&t.end!=null);
+  // day-number <-> ISO, anchored on a date whose day-number AND ISO we both know (travel start, else today).
+  const anchorDay=hasSpan?t.start:t.currentDate, anchorIso=hasSpan?t.startLabel:t.currentLabel;
+  const dayToIso=d=>fromMs(toMs(anchorIso)+(d-anchorDay)*DAY);
+  const isoToDay=iso=>anchorDay+Math.round((toMs(iso)-toMs(anchorIso))/DAY);
+  _dm={t,hasSpan,dayToIso,isoToDay,anchorDay};
+  $('dmMsg').textContent=hasSpan
+    ? `Travel ${t.startLabel} → ${t.endLabel} (${t.end-t.start+1}d). Slide “today” across before-travel, the travel window, and 1 day after — or type a date. Set how far back the timeline starts below.`
+    : 'No dated services yet — pick a date for the demo clock.';
+  $('dmBefore').value=DM_BEFORE_DEFAULT;
+  $('dmDate').value=t.currentLabel;
+  dmBuild(t.currentDate);                                 // build the bar + slider for the default before-window
+  $('dateModal').style.display='flex';
+}
+// (re)build the zone bar + slider range for the current "days before travel"; position the thumb at `focusDay` (clamped).
+function dmBuild(focusDay){
+  const t=_dm.t;
+  const before=Math.max(1,Math.round(Number($('dmBefore').value)||DM_BEFORE_DEFAULT));
+  const min=_dm.anchorDay-before, max=_dm.hasSpan?t.end+1:t.currentDate+30;
+  const bar=$('dmBar');
+  if(_dm.hasSpan){
+    const travelD=t.end-t.start+1, total=before+travelD+1, pct=n=>(n/total*100).toFixed(2)+'%';
+    bar.innerHTML=`<div class="dz dz-before" style="width:${pct(before)}">before · ${before}d</div>`+
+      `<div class="dz dz-travel" style="width:${pct(travelD)}" title="travel window">travel · ${travelD}d</div>`+
+      `<div class="dz dz-after" style="width:${pct(1)}" title="1 day after travel">after · 1d</div>`;
+    bar.style.display='flex';
+  } else bar.style.display='none';
+  const s=$('dmSlider'); s.min=min; s.max=max; s.step=1; s.style.display=_dm.hasSpan?'block':'none';
+  const day=(focusDay!=null)?focusDay:Number(s.value);
+  s.value=Math.max(min,Math.min(max,day));               // clamp the thumb; the date input still shows the real value
+  dmRender(day);
+}
+// "days before travel" input changed → rebuild the timeline, keeping the currently chosen date in focus.
+function dmSetBefore(){ const v=$('dmDate').value; dmBuild(v?_dm.isoToDay(v):Number($('dmSlider').value)); }
+// readout: chosen ISO date + which category it falls in + a human relative-to-travel phrase.
+function dmRender(day){
+  const t=_dm.t; let cat='', rel='';
+  if(_dm.hasSpan){
+    if(day<t.start){ const n=t.start-day; cat='before travel'; rel=n+' day'+(n===1?'':'s')+' before travel'; }
+    else if(day<=t.end){ cat='travel'; rel='day '+(day-t.start+1)+' of '+(t.end-t.start+1); }
+    else { const n=day-t.end; cat='after travel'; rel=n+' day'+(n===1?'':'s')+' after travel'; }
+  }
+  $('dmReadout').innerHTML=`<b>${_dm.dayToIso(day)}</b>`+(cat?` · <b>${esc(cat)}</b> · ${esc(rel)}`:'');
+}
+function dmFromSlider(){ const day=Number($('dmSlider').value); $('dmDate').value=_dm.dayToIso(day); dmRender(day); }
+function dmFromDate(){ const v=$('dmDate').value; if(!v) return; const day=_dm.isoToDay(v); const s=$('dmSlider'); s.value=Math.max(Number(s.min),Math.min(Number(s.max),day)); dmRender(day); }
+function dmReset(){ itn.changeCurrentDate(null); $('dateModal').style.display='none'; _dm=null; render(); }
+function closeDateModal(commit){
+  if(commit===true){ const v=$('dmDate').value; itn.changeCurrentDate(v&&v.trim()!==''?v.trim():null); }
+  $('dateModal').style.display='none'; _dm=null;
+  if(commit===true) render();
+}
+
+/* ---------- action dispatch ---------- */
+function hasInputs(schema){ return schema && schema.properties && Object.keys(schema.properties).length>0; }
+async function runAction(id, presetInput){
+  itn.select(modalUnitId);                 // item actions bind to the open unit
+  let a=actById(id); if(!a || !a.isAllowed(presetInput||{}).ok) return;
+  if(hasInputs(a.params) && !presetInput){ openForm(a); return; }
+  await a.execute(presetInput||{});
+  render();
+}
+/* edit a specific traveller: focus it in the aggregate first so the Edit Pax form defaults to ITS values (R-PX-04). */
+function editPaxForm(id){ itn.selectPax(id); openForm(actById('editPax'),{paxId:id}); }
+/* voucher buttons: gate on the voucher id, then open a form for any remaining fields (booking/comment) or run directly. */
+function voucherAction(id, voucherId){
+  itn.select(null);
+  const a=actById(id); if(!a || !a.isAllowed({voucherId}).ok) return;
+  const extra=(a.params&&a.params.properties)?Object.keys(a.params.properties).filter(k=>k!=='voucherId'):[];
+  if(extra.length){ openForm(a,{voucherId}); }
+  else { a.execute({voucherId}).then(render); }
+}
+
+/* ---------- generic schema form ---------- */
+let _form=null;
+function openForm(a, preset){
+  _form={ id:a.id, schema:a.params, preset:preset||{} };
+  $('fmTitle').textContent=a.description;
+  $('fmMsg').textContent=(a.preconditions?'Precondition: '+a.preconditions+'\n':'')+(a.outcome?'Outcome: '+a.outcome:'');
+  $('fmFields').innerHTML=Object.entries(a.params.properties).map(([k,p])=>fieldHTML(k,p,a.params.required||[],_form.preset)).join('');
+  $('formModal').style.display='flex';
+  setTimeout(()=>{ const f=$('fmFields').querySelector('input:not([readonly]),select:not([disabled])'); if(f){ f.focus(); if(f.select) f.select(); } },0);
+}
+function fieldHTML(k,p,req,preset){
+  preset=preset||{};
+  const title=(p.title||k)+(req.includes(k)?' *':'');
+  const locked=Object.prototype.hasOwnProperty.call(preset,k);   // a pre-filled value (e.g. voucherId) — shown read-only
+  const pv=locked?preset[k]:undefined;
+  let ctrl;
+  if(p.enum){ ctrl=`<select data-k="${k}" ${locked?'disabled':''}>`+p.enum.map(v=>`<option ${ (locked?pv===v:p.default===v)?'selected':''} value="${esc(v)}">${esc(v)}</option>`).join('')+`</select>`; }
+  else if(p.type==='boolean'){ return `<div class="field"><label class="checks"><label><input type="checkbox" data-k="${k}" data-t="boolean" ${(locked?pv:p.default)?'checked':''}> ${esc(title)}</label></label></div>`; }
+  else if(p.type==='array' && /pax/i.test(k)){
+    // pre-check from the schema default (the action supplies the selected line's current travellers)
+    const sel=Array.isArray(p.default)?p.default:[];
+    // label each traveller with its coloured GROUP, tag, type, full name and age (mirrors the traveller cards).
+    ctrl=`<div class="checks" data-k="${k}" data-t="paxarray">`+itn.pax.map(px=>{
+      const col=paxGroupColor(px.group);
+      const grp=px.group?`<span class="pgrp" style="color:${col||'inherit'}">${esc(px.group)}</span> · `:'';
+      const age=(px.age!=null&&px.age!=='')?` <span class="hint">· ${px.age}y</span>`:'';
+      const nm=px.fullName?' '+esc(px.fullName):'';
+      return `<label><input type="checkbox" value="${px.id}" ${sel.includes(px.id)?'checked':''}> ${grp}<b>${esc(px.tag||px.name)}</b>${nm}${age}</label>`;
+    }).join('')+`</div>`;
+    return `<div class="field"><label>${esc(title)}</label>${ctrl}</div>`;
+  }
+  else if(p.type==='array'){ ctrl=`<input type="text" data-k="${k}" data-t="csv" value="${esc((p.default||[]).join(','))}" placeholder="comma,separated">`; }
+  else if(k==='paxId'){ const cur=locked?pv:undefined; ctrl=`<select data-k="${k}" ${locked?'disabled':''}>`+itn.pax.map(px=>`<option value="${px.id}" ${cur===px.id?'selected':''}>${esc(px.tag||px.name)}${px.fullName?' — '+esc(px.fullName):''}</option>`).join('')+`</select>`; }
+  else if(k==='itemId'){ const st=itn.staged(); ctrl=`<select data-k="${k}">`+st.map(u=>`<option value="${u.id}">${esc(u.name)} · ${u.id}</option>`).join('')+`</select>`; }
+  else if(p.type==='number'){ ctrl=`<input type="number" data-k="${k}" data-t="number" value="${locked?esc(pv):(p.default==null?'':p.default)}" ${locked?'readonly':''}>`; }
+  else if(p.format==='date'){ ctrl=`<input type="date" data-k="${k}" value="${esc(locked?pv:(p.default==null?'':p.default))}" ${locked?'readonly':''}>`; }
+  else { ctrl=`<input type="text" data-k="${k}" value="${esc(locked?pv:(p.default==null?'':p.default))}" ${locked?'readonly':''}>`; }
+  return `<div class="field"><label>${esc(title)}</label>${ctrl}</div>`;
+}
+function collectForm(){
+  const out={};
+  $('fmFields').querySelectorAll('[data-k]').forEach(el=>{
+    const k=el.getAttribute('data-k'), t=el.getAttribute('data-t');
+    if(t==='boolean'){ out[k]=el.checked; return; }
+    if(t==='paxarray'){ out[k]=[...el.querySelectorAll('input:checked')].map(c=>c.value); return; }
+    if(t==='csv'){ const v=el.value.trim(); out[k]=v?v.split(',').map(s=>s.trim()).filter(Boolean):[]; return; }
+    if(t==='number'){ if(el.value.trim()!=='') out[k]=Number(el.value); return; }   // blank number → omitted
+    if(el.value!=='') out[k]=el.value;
+  });
+  return out;
+}
+async function fmClose(run){
+  const f=_form;
+  if(!run || !f){ $('formModal').style.display='none'; _form=null; return; }
+  itn.select(modalUnitId);
+  const a=actById(f.id);
+  if(!a){ $('formModal').style.display='none'; _form=null; render(); return; }
+  const input=collectForm();
+  const v=a.isAllowed(input);
+  if(!v.ok){ $('fmMsg').textContent='⚠ '+(v.why||'Not allowed.'); return; }   // invalid params → keep the form open and show why
+  const res=await a.execute(input);
+  if(res && res.ok===false){ $('fmMsg').textContent='⚠ '+(res.why||'Action failed.'); return; }   // execute refused (e.g. bad params) → keep open
+  $('formModal').style.display='none'; _form=null;
+  render();
+}
+
+/* ===================== RENDER ===================== */
+function render(){
+  $('srcinfo').textContent='itny.js · v'+CFG.meta.version+' · '+CFG.meta.model;
+  document.body.classList.toggle('compact', _density==='compact');
+  { const anyOpen=ALL_CARDS.some(k=>!collapsed.has(k)); const fb=$('foldBtn'); if(fb) fb.textContent=anyOpen?'⤡ Fold all':'⤢ Unfold all';
+    const db=$('densBtn'); if(db) db.textContent=_density==='compact'?'≡ Compact':'≡ Comfortable'; }
+  $('userpick').innerHTML=userSelectHTML();
+  $('agencypick').innerHTML=agencySelectHTML();
+  const p=itn.projection(), s=itn.summary();
+  $('dateBtn').textContent='🕑 Set date ('+s.travel.currentLabel+')';
+  $('app').innerHTML=`<div class="wrap">
+    <div class="col">
+      <div class="card">${stepperHTML()}</div>
+      ${card('summary','Itinerary summary (read-model)', chipsHTML(p,s)+'<div style="height:9px"></div>'+listHTML(s))}
+      ${card('travellers','Travellers', paxHTML(p)+actListHTML(['addTraveller','removeTraveller','editPax']), paxHintHTML())}
+      ${card('services','Services &amp; extras', itemsPanelHTML(p), '<span class="hint">(click a line to open its actions)</span>')}
+      ${p.isBrochure ? '' : card('promotions','Promotions &amp; Discounts', promotionsPanelHTML(p), '<span class="hint">(selected instances + the catalog · select on an accommodation line)</span>') +
+        card('suppliers','Suppliers &amp; vouchers', suppliersHTML(p)) +
+        card('documents','Documents', docsHTML(p), '<span class="hint">(generated quotes, invoices &amp; FCAs · snapshot of the itinerary)</span>')}
+      ${card('history','History / audit', logHTML())}
+      ${card('versions','Versions', versionsHTML(), '<span class="hint">(snapshot of the itinerary after each applied change)</span>')}
+      ${''/* State (JSON) panel hidden for now — restore: card('json','State (JSON)', jsonHTML()) */}
+    </div>
+    <div class="col col-rail">
+      ${pendingHTML(p)}
+      ${card('actions','Itinerary actions', lifeActionsHTML())}
+      ${p.isBrochure ? '' : card('payments','Payments &amp; allocations', paymentsHTML(p))}
+    </div>
+  </div>${itemModalHTML(p)}${voucherModalHTML(p)}${docModalHTML(p)}${promoModalHTML(p)}`;
+  if(gridTab==='graph') drawRouteGraph();   // route tab → draw the Mermaid gitGraph into its host (async, post-DOM)
+  updateHH();                               // keep the sticky-rail offset matched to the (wrapping) header height
+}
+
+function stepperHTML(){
+  // Ladder + terminal trio come from the read-model (summary) so a BROCHURE renders its cut-down DRAFT↔PREPARED
+  // ladder with no terminals, while a BOOKING renders the full spine — the view never decides the shape.
+  const s=itn.summary();
+  const FLOW=s.flow, ci=FLOW.findIndex(f=>f[0]===itn.status);
+  const typeBadge=s.isBrochure?`<div style="margin-bottom:7px"><span class="badge b-warn">🔖 BROCHURE · DRAFT ↔ PREPARED</span></div>`:'';
+  const ladder=`<div class="stepper">`+FLOW.map((f,i)=>`<div class="step ${f[0]===itn.status?'active':(ci>=0&&i<ci?'done':'')}"><span class="s-name">${ci>=0&&i<ci?'✓ ':''}${f[0]}</span><span class="s-sub">${f[1]}</span></div>`).join('')+`</div>`;
+  const TERMS=s.terminals||[];
+  const terms=TERMS.length?`<div class="stepper" style="margin-top:6px">`+TERMS.map(t=>{
+    const on=itn.status===t[0];
+    return `<div class="step${on?' active':''}" style="${on?'border-color:var(--bad);background:#2a1414':'opacity:.5'}"><span class="s-name">${on?'■ ':''}${t[0]}</span><span class="s-sub">${t[1]}</span></div>`;
+  }).join('')+`</div>`:'';
+  return typeBadge+ladder+terms;
+}
+// Milestone countdown accent → colour (green > 3 days / yellow 1–3 / red at-or-after due).
+function mAccentColor(a){ return a==='red'?'var(--bad)':(a==='yellow'?'var(--warn)':'var(--good)'); }
+function mTypeLabel(t){ return t==='REFUND_TO_CLIENT'?'refund':'receive'; }
+// The closest-unpaid-milestone chip in the itinerary summary: kind + due token + amount + days-left, accent-coloured.
+function milestoneChipHTML(m){
+  const col=mAccentColor(m.accent);
+  const left=m.daysLeft!=null?` · ${m.daysLeft}d`:'';
+  return `<span class="chip" style="border-color:${col};color:${col}"><span class="k">next ${esc(m.kind.toLowerCase())} ${m.dueLabel}</span><b class="num">$${m.amt}${left}</b></span>`;
+}
+// FINAL PROFIT chip — same accented style as the deposit/milestone chips (border-color + color), RED when negative.
+function finalProfitChipHTML(profit){
+  const v=profit||0, col=v<0?'var(--bad)':'var(--good)';
+  return `<span class="chip" style="border-color:${col};color:${col}"><span class="k">FINAL PROFIT</span><b class="num">${v<0?'−$'+Math.abs(v):'$'+v}</b></span>`;
+}
+function chipsHTML(p,s){
+  const c={ADULT:0,CHILD:0,INFANT:0}; p.pax.forEach(x=>c[x.type]++);
+  const term=['LOST','SUPERSEDED','CANCELLED'].includes(itn.status);
+  const recChips=Object.entries(s.supplierStatus).map(([k,n])=>`<span class="chip"><span class="k">${k}</span><b>${n}</b></span>`).join('');
+  const tv=s.travel;
+  const tLabel={TRAVEL_NOT_STARTED:'not started',TRAVEL_IN_PROGRESS:'in progress',TRAVEL_COMPLETED:'completed'}[tv.status]||tv.status;
+  const tColor=tv.status==='TRAVEL_IN_PROGRESS'?'var(--good)':(tv.status==='TRAVEL_COMPLETED'?'var(--dim)':'');
+  const countdown=(tv.status==='TRAVEL_NOT_STARTED'&&tv.daysToStart!=null)?` · ${tv.daysToStart}d to go`:'';
+  // Chips clustered into related groups (status/identity · trip — when & who · money · ops & flags); each group is a
+  // divided cluster so the row reads as chunks. Empty entries are filtered, and an empty group renders nothing.
+  const groups=[
+    { label:'status', chips:[
+      `<span class="chip"${term?' style="color:var(--bad)"':''}><span class="k">status</span><b>${itn.status}</b></span>`,
+      (!itn.isBrochure()&&itn.agencyAgent)?`<span class="chip"><span class="k">agency/agent</span><b>${esc(itn.agencyAgent)}</b></span>`:'',
+      itn.inquiryId?`<span class="chip"><span class="k">inquiry</span><b>${esc(itn.inquiryId)}</b></span>`:'',
+    ]},
+    { label:'trip', chips:[
+      `<span class="chip"><span class="k">travel</span><b>${tv.startLabel}→${tv.endLabel}</b></span>`,
+      `<span class="chip"${tColor?` style="color:${tColor}"`:''}><span class="k">today ${tv.currentLabel}</span><b>${tLabel}${countdown}</b></span>`,
+      `<span class="chip"><span class="k">pax</span><b>${[['ADT',c.ADULT],['CHD',c.CHILD],['INF',c.INFANT]].filter(x=>x[1]>0).map(x=>x[1]+' '+x[0]).join(' · ')||'0'}</b></span>`,
+    ]},
+    { label:'money', chips:[
+      `<span class="chip"><span class="k">payment</span><b>${itn.paymentStatus}</b></span>`,
+      `<span class="chip"><span class="k">total</span><b class="num">$${p.totals.total}</b></span>`,
+      `<span class="chip"><span class="k">paid</span><b class="num">$${p.totals.paid}</b></span>`,
+      `<span class="chip"><span class="k">due</span><b class="num">$${p.totals.due}</b></span>`,
+      // FINAL PROFIT — Σ (client sell − supplier cost); accent-coloured like the deposit/milestone chips, RED when negative.
+      finalProfitChipHTML(p.totals.profit),
+      (!itn.isBrochure()&&s.nextMilestone)?milestoneChipHTML(s.nextMilestone):'',
+    ]},
+    { label:'ops', chips:[
+      (!itn.isBrochure()&&s.closesHold)?`<span class="chip"${s.closesHold.expiresIn<=3?' style="color:var(--bad)"':''}><span class="k">hold closes ${esc(s.closesHold.expiresAt)}</span><b>${esc(s.closesHold.itemName)} · expires in ${s.closesHold.expiresIn}d</b></span>`:'',
+      itn.creditTerms?'<span class="chip"><span class="k">credit</span><b>terms</b></span>':'',
+      itn.financeLocked?'<span class="chip flag">🔒 finance locked</span>':'',
+      s.opsChecked?'<span class="chip" style="color:var(--good)">✓ OPS_CHECKED</span>':'',
+      itn.fcaGenerated?'<span class="chip" style="color:var(--good)">📄 FCA generated</span>':(s.flags.includes('fca-ready')?'<span class="chip" style="color:var(--good)">FCA ready</span>':''),
+      recChips,
+    ]},
+  ];
+  return `<div class="chips">`+groups.map(g=>{ const inner=g.chips.filter(Boolean).join(''); return inner?`<div class="chipgrp"><span class="gl">${g.label}</span>${inner}</div>`:''; }).join('')+changeChipGroup(s)+`</div>`;
+}
+// The pending-change stat bar (status · committed · projected · delta), shared by the itinerary summary and the
+// pending-changes panel so both read identically. Returns '' when there is no open change.
+// The inner pending-change stat group (status · committed · projected · delta). Returns '' when no change is open.
+function changeChipGroup(s){
+  if(!itn.inChange()) return '';
+  const delta=s.changeTotal, deltaCol=delta>0?'var(--warn)':(delta<0?'var(--rec)':'var(--dim)');
+  return `<div class="chipgrp chipgrp-tight"><span class="gl">change</span>`+
+    `<span class="chip"><span class="k">status</span><b>${itn.pendingStatus}</b></span>`+
+    `<span class="chip"><span class="k">committed</span><b class="num">$${s.committedTotal}</b></span>`+
+    `<span class="chip"><span class="k">projected</span><b class="num">$${s.projectedTotal}</b></span>`+
+    `<span class="chip"><span class="k">delta</span><b class="num" style="color:${deltaCol}">${delta>0?'+':''}$${delta}</b></span>`+
+  `</div>`;
+}
+// Standalone wrapper for the pending-changes panel. The itinerary summary embeds the group directly inside its own
+// .chips (via chipsHTML) so every group row — including this one — shares the same vertical gap.
+function changeChipsHTML(s){ return itn.inChange()?`<div class="chips" style="margin:2px 0 9px">${changeChipGroup(s)}</div>`:''; }
+// Title + itinerary status + flags only — pay / total / pending are shown by the chip groups above (and the change
+// bar), so they are no longer duplicated here.
+function listHTML(s){
+  return `<div class="lirow">
+    <span class="linm">${esc(s.title)}</span>
+    <span class="pill ${stBadge(s.status)}">${s.status}</span>
+    ${s.flags.map(f=>`<span class="lflag">⚑ ${f}</span>`).join('')}
+  </div>`;
+}
+function paxHintHTML(){
+  const a=actById('addTraveller'); const r=a.isAllowed();
+  return r.ok?`<span class="hint">(click ✕ to remove)</span>`:`<span class="hint">(read-only — ${esc(r.why)})</span>`;
+}
+// A stable accent colour per pax GROUP (surname) — same group → same colour, empty group → neutral line colour.
+// Muted, desaturated tints (not the saturated badge palette) so the group accents read as gentle, not aggressive.
+const PAX_GROUP_COLORS=['#8ab4d8','#9cc79c','#d8c188','#b6a8d8','#d8a0a0','#8fc6cc','#cf9fbb','#c9bd86','#9db8d4','#a8cda8'];
+function paxGroupColor(g){ if(!g) return null; let h=0; for(let i=0;i<g.length;i++) h=(h*31+g.charCodeAt(i))>>>0; return PAX_GROUP_COLORS[h%PAX_GROUP_COLORS.length]; }
+function paxHTML(p){
+  const canEdit=actById('addTraveller').isAllowed().ok;
+  const canEditPax=actById('editPax').isAllowed().ok;
+  const editedSet=(itn.changeSet&&itn.changeSet.paxEdits)||{};
+  const cards=p.pax.map(px=>{
+    const col=paxGroupColor(px.group);
+    const cls=px.pendingRemove?'remove':(px.origin==='PENDING'?'pending':'');
+    const style=col?` style="border-left-color:${col}"`:'';
+    // row 1 — group? · tag · age (age optional, esp. for adults); row 2 — full name (— until set via Edit Pax)
+    const grp=px.group?`<span class="pgrp" style="color:${col||'inherit'}">${esc(px.group)}</span> · `:'';
+    const age=(px.age!=null&&px.age!=='')?` <span class="page">· ${px.age}y</span>`:'';
+    const tags=`${px.origin==='PENDING'?' ·PENDING':''}${px.pendingRemove?' ·remove@apply':''}${editedSet[px.id]?' ·edited':''}`;
+    const x=canEdit?`<button class="pcx" title="remove" onclick="runAction('removeTraveller',{paxId:'${px.id}'})">✕</button>`:'';
+    const ed=canEditPax?`<button class="pced" title="edit" onclick="editPaxForm('${px.id}')">✎</button>`:'';
+    return `<div class="paxcard ${cls}"${style}>${x}
+      <div class="pc1">${grp}<span class="ptag" title="auto tag">${esc(px.tag||px.name)}</span>${age}${tags?`<span class="hint">${tags}</span>`:''}</div>
+      <div class="pc2">${ed} ${px.fullName?esc(px.fullName):'<span class="hint">— no name</span>'}</div>
+    </div>`;
+  }).join('');
+  return `<div class="paxcards">${cards}</div>`;
+}
+function unitHTML(u){
+  const sel=modalUnitId===u.id?'sel':'', ext=u.parentId?'extra':'';
+  const canc=(u.status==='CANCELLED'||u.pendingOp==='CANCEL'||u.pendingOp==='REMOVE')?'cancelled':'';
+  const sup=CFG.suppliers[u.supplierId];
+  // location: a transfer routes from → to; everything else sits AT a single place.
+  const loc=u.type==='TRANSPORT'?((u.fromLocation||u.toLocation)?`${u.fromLocation||'?'}→${u.toLocation||'?'}`:''):(u.location?'@'+u.location:'');
+  const flags=[];
+  // every badge below is built via bdg(key,…) so hovering it explains itself in the shared #hoverbar (see BADGE_HELP / badgeHover).
+  if(u.locked) flags.push(bdg('locked','b-bad','🔒 LOCKED'));   // a supplier payment locked this line — only FIN can Unlock
+  if(u.isAuto) flags.push(bdg('auto-confirm','b-dim','auto-confirm'));   // insurance & co. — booked on its own CONFIRMED voucher at send
+  if(u.pendingOp) flags.push(bdg('pendingOp','b-op',OPSYM[u.pendingOp]||u.pendingOp));
+  if(u.origin==='PENDING') flags.push(bdg('PENDING','b-op','PENDING'));
+  if(u.hypothetical) flags.push(bdg('hypothetical','b-warn','hypothetical'));   // the system price is an unvalidated estimate (cleared by Validate price)
+  if(u.manuallyPriced) flags.push(bdg('manual-price','b-st','manual-price'));   // a seller sell-side lever is set (total/margin/override)
+  if(u.overpriced) flags.push(bdg('overpriced','b-warn','overpriced'));         // sell above the rack ceiling
+  if(u.underpriced) flags.push(bdg('underpriced','b-bad','underpriced'));       // sell below cost (net) — selling at a loss
+  // supplier status badge — per-value colours matching itny.lifecycle.html (NeedsRequest→acc, AwaitingSupplier→warn,
+  // NeedsDecision→bad, Booked→good); Rejected reuses the NeedsDecision colour.
+  const REC_CLS={NeedsRequest:'b-st',AwaitingSupplier:'b-warn',NeedsDecision:'b-bad',Rejected:'b-bad',Booked:'b-good'};
+  if(u.supplierStatus) flags.push(bdg(u.supplierStatus,REC_CLS[u.supplierStatus]||'b-rec','⇄ '+u.supplierStatus));
+  if(u.isUpdated) flags.push(bdg('UPDATED','b-warn','UPDATED'));   // amended CONFIRMED line — agreed figure is stale (derived label, not a status)
+  if(u.line && u.line.state) flags.push(bdg('line','b-dim',`line:${u.line.state} v${u.line.ver||'-'}`));
+  // activeHold status (HELD / EXPIRED / VOIDED) — the single most-relevant supplier hold for the line.
+  if(u.activeHold){ const ah=u.activeHold; const cls=ah.status==='HELD'?(ah.covers?'b-good':'b-warn'):(ah.status==='EXPIRED'?'b-bad':'b-dim'); flags.push(bdg('hold',cls,`⏳ hold ${ah.status}${(ah.status==='HELD'&&!ah.covers)?' ·stale':''}`)); }
+  if(u.holdMismatch) flags.push(bdg('hold mismatch','b-warn','hold mismatch'));
+  if(u.requestOnApply) flags.push(bdg('request on apply','b-warn','⇪ request on apply'));
+  if(u.opsReady) flags.push(bdg('OPS_READY','b-good','OPS_READY'));
+  if(u.documents && u.documents.length) flags.push(`<span class="badge b-dim" title="${u.documents.length} attached document(s)">📄 ${u.documents.length}</span>`);   // item-attached documents (Add Document)
+  if(u.commercial && u.commercial.priorRequested && u.commercial.priorRequested.wasPending && !u.commercial.priorRequested.resolved) flags.push(bdg('race','b-bad',`prior v${u.commercial.priorRequested.ver} race`));
+  if(u.commercial && u.commercial.supplierAside) flags.push(bdg('aside','b-bad',`aside:${u.commercial.supplierAside.state}`));
+  // price WITH promos (effective); show the pre-promo sell struck-through when a promotion discount applies.
+  const _pr=u.price||{};
+  const priceHTML=_pr.promoDiscount?`<span class="num" title="before promos $${_pr.sellBeforePromos}"><span class="hint" style="text-decoration:line-through">$${_pr.sellBeforePromos}</span> $${u.sellPrice}</span>`:`<span class="num">$${u.sellPrice}</span>`;
+  // selected promotions on this line — rendered as a LIST at the end of the card (matched=green, unmatched=yellow); each clickable.
+  const _sel=((u.promotions||{}).selected)||[];
+  const promoListHTML=_sel.length?`<div class="upromos">${_sel.map(r=>{const am=(u.price&&u.price.appliedPromos||[]).find(x=>x.id===r.promo.id);const amt=am&&am.amount?` <span class="hint">−$${am.amount}</span>`:'';return `<span class="upromo ${r.eval&&r.eval.matched?'ok':'no'}" onclick="event.stopPropagation();openPromo('${r.promo.id}')">🏷 ${esc(r.promo.name)}${r.promo.isManual?' <span class="hint">(manual)</span>':''}${r.eval&&r.eval.matched?amt:' <span class="hint">· no match</span>'}</span>`;}).join('')}</div>`:'';
+  return `<div class="unit ${sel} ${ext} ${canc}" data-paxids="${(u.paxIds||[]).join(' ')}" onclick="selectUnit('${u.id}')"><div class="urow"><div class="umain">
+    <div class="top"><span class="nm">${esc(u.name)}</span>${bdg(u.status,stBadge(u.status),u.status)}${flags.join(' ')}</div>
+    <div class="meta">
+      <span>${u.id} · ${u.type}</span><span>${sup?sup.name:u.supplierId}</span>${loc?`<span title="location">📍 ${esc(loc)}</span>`:''}
+      ${u.parentId?'':`<span>${u.startDate||'?'}→${u.endDate||'?'}</span>`}
+      <span>pax ${(u.paxIds||[]).length}${(u.paxIds||[]).length?': '+(u.paxIds).map(paxName).join('·'):''}</span>${u.qty&&u.qty!==1?`<span>×${u.qty}</span>`:''}${priceHTML}
+      ${u.supplierPayment&&u.supplierPayment.dueDate?`<span class="num" title="supplier balance due — ${u.supplierPayment.daysBeforeStart}d before travel start ${u.supplierPayment.startDate}${u.supplierPayment.fromTerms?' (confirmed terms)':' (supplier default)'}">⏰ pay ${u.supplierPayment.dueDate}</span>`:''}
+    </div>${u.changes?`<div class="diff" style="margin-top:4px">${changeRowsHTML(u.changes).join(' · ')}</div>`:''}${promoListHTML}</div>${groupBadgesHTML(u)}</div></div>`;
+}
+// Right-of-card badges: one compact chip per pax GROUP allocated to the item — a coloured left bar with the group name
+// + pax count, then each traveller as "TAG full name" (tag in the group colour, name dim, truncated; full text on hover).
+function groupBadgesHTML(u){
+  const ids=u.paxIds||[]; if(!ids.length) return '';
+  const order=[], byGroup={};
+  ids.forEach(id=>{ const px=itn.pax.find(x=>x.id===id); if(!px) return; const g=px.group||'—'; if(!byGroup[g]){byGroup[g]=[];order.push(g);} byGroup[g].push(px); });
+  if(!order.length) return '';
+  // total travellers per group across the whole itinerary, so each chip can read "X of Y" (allocated of the group).
+  const groupTotal={}; itn.pax.forEach(px=>{ const g=px.group||'—'; groupTotal[g]=(groupTotal[g]||0)+1; });
+  const chips=order.map(g=>{
+    const col=paxGroupColor(g)||'var(--dim)';
+    const have=byGroup[g].length, tot=groupTotal[g]||have, whole=have>=tot;   // whole group on this service → ✓
+    const lis=byGroup[g].map(px=>{
+      const full=(px.tag||px.name)+(px.fullName?' '+px.fullName:'');
+      return `<div class="ugpx" title="${esc(full)}"><span class="ugt">${esc(px.tag||px.name)}</span>${px.fullName?' '+esc(px.fullName):''}</div>`;
+    }).join('');
+    const count=`<span class="ugn">${have} of ${tot}</span>${whole?` <span class="ugck" title="whole group allocated">✓</span>`:''}`;
+    return `<div class="ugrp" style="--gc:${col}"><div class="ugh">${esc(g)} ${count}</div>${lis}</div>`;
+  }).join('');
+  return `<div class="ugroups">${chips}</div>`;
+}
+function itemsHTML(p){
+  if(!p.items.length) return '<div class="hint">No services. Use “Add service”.</div>';
+  return p.items.map(s=>unitHTML(s)+(s.extras||[]).map(unitHTML).join('')).join('');
+}
+// Services & extras panel: Add-service action, then the switchable grid panel, then the line list.
+function itemsPanelHTML(p){
+  return `${actListHTML(['addService'])}${gridPanelHTML(p)}${itemsHTML(p)}`;
+}
+// Service types charted on the grid panels — the core travel services only (accommodation, transport/transfers,
+// flights, activities). Extras and travel insurance are deliberately excluded (they ride a parent / cover the whole trip).
+const GRID_TYPES=['ACCOMMODATION','FLIGHT','ACTIVITY','TRANSPORT'];
+const GRID_TABS=[['none','None'],['alloc','Allocation grid'],['ribbon','Route ribbon'],['graph','Route graph']];
+// The three switchable grid views: a tab bar over the allocation matrix / per-pax route ribbon / location graph.
+// All three read the SAME charted units + travel span; only the rendering differs. `gridTab` holds the selection.
+function gridPanelHTML(p){
+  if(!p.pax.length) return '<div class="hint">No travellers.</div>';
+  const bar=`<div class="tabs">`+GRID_TABS.map(t=>`<button class="${gridTab===t[0]?'on':''}" onclick="gridTab='${t[0]}';render()">${t[1]}</button>`).join('')+`</div>`;
+  const body = gridTab==='none' ? '' : gridTab==='ribbon' ? ribbonGridHTML(p) : gridTab==='graph' ? routeGraphHTML(p) : allocGridHTML(p);
+  return bar+body;
+}
+// Shared span: the charted (live, core-type) units and the union travel span as a list of ISO day columns. Null when
+// there is nothing dated to chart. Allocation grid + route ribbon both build their date columns from this.
+function gridSpan(p){
+  const live=u=>u.status!=='CANCELLED'&&u.pendingOp!=='REMOVE';
+  const units=[];
+  (p.items||[]).forEach(s=>{ if(live(s)&&GRID_TYPES.includes(s.type)) units.push(s); });   // services only — no extras, no insurance
+  let minD=null,maxD=null;
+  units.forEach(u=>{ if(u.startDate&&(!minD||u.startDate<minD))minD=u.startDate; if(u.endDate&&(!maxD||u.endDate>maxD))maxD=u.endDate; });
+  if(!minD||!maxD) return null;
+  const toMs=s=>{const a=String(s).split('-').map(Number);return Date.UTC(a[0],a[1]-1,a[2]);};
+  const fromMs=ms=>new Date(ms).toISOString().slice(0,10);
+  const dates=[]; for(let t=toMs(minD);t<=toMs(maxD);t+=86400000) dates.push(fromMs(t));
+  return {units, dates};
+}
+// Allocation grid — rows = travellers (y), columns = each travel date (x); a green ✓ where the pax is allocated to an
+// active service/extra covering that date, a red ✗ where they are not. A pax counts as allocated on a date if any
+// active unit they are on spans that date. Night columns (between days) show overnight coverage.
+function allocGridHTML(p){
+  const span=gridSpan(p); if(!span) return '<div class="hint">No dated services to chart.</div>';
+  const {units, dates}=span;
+  const allocated=(pxId,dt)=>units.some(u=>(u.paxIds||[]).includes(pxId)&&u.startDate<=dt&&dt<=u.endDate);
+  const overnight=(pxId,i)=>units.some(u=>(u.paxIds||[]).includes(pxId)&&u.startDate<=dates[i]&&u.endDate>=dates[i+1]);
+  const nightTh=i=>i<dates.length-1?`<th class="agnt" title="night ${dates[i]} → ${dates[i+1]}">🌙</th>`:'';
+  const head=`<tr><th class="agpx">Traveller</th>${dates.map((dt,i)=>`<th class="agdt" title="${dt}">${dt.slice(5)}</th>`+nightTh(i)).join('')}</tr>`;
+  const rows=p.pax.map(px=>{
+    const col=paxGroupColor(px.group)||'var(--dim)';
+    const cells=dates.map((dt,i)=>{
+      const day=allocated(px.id,dt)?'<td class="agok" title="allocated">✓</td>':'<td class="agno" title="not allocated">✗</td>';
+      const night=i<dates.length-1?(overnight(px.id,i)
+        ? `<td class="agnite agok" title="overnight ${dates[i]} → ${dates[i+1]}">✓</td>`
+        : `<td class="agnite" title="no overnight ${dates[i]} → ${dates[i+1]}">·</td>`):'';
+      return day+night;
+    }).join('');
+    return `<tr onmouseover="paxHover('${px.id}')" onmouseleave="paxHover('')"><th class="agpx" style="border-left:3px solid ${col}" title="${esc((px.tag||px.name)+(px.fullName?' '+px.fullName:''))}"><span class="agtag">${esc(px.tag||px.name)}</span> <span class="agnm">${esc(px.fullName||'')}</span></th>${cells}</tr>`;
+  }).join('');
+  return `<div class="aggrid-wrap"><table class="aggrid"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+// Route ribbon — one column-aligned route TRACK per traveller (no ✓/✗ matrix): a continuous stay bar across the
+// columns it covers, a transfer node on its day, a red × where transport is missing. Same date columns as the grid.
+function ribbonGridHTML(p){
+  const span=gridSpan(p); if(!span) return '<div class="hint">No dated services to chart.</div>';
+  const {dates}=span;
+  const nightTh=i=>i<dates.length-1?`<th class="agnt" title="night ${dates[i]} → ${dates[i+1]}">🌙</th>`:'';
+  const head=`<tr><th class="agpx">Traveller</th>${dates.map((dt,i)=>`<th class="agdt" title="${dt}">${dt.slice(5)}</th>`+nightTh(i)).join('')}</tr>`;
+  const rows=p.pax.map(px=>routeRowHTML(px, dates, itn.paxRoute(px.id))).join('');
+  return `<div class="aggrid-wrap"><table class="aggrid"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+// Column-aligned route track for one traveller, drawn UNDER the day/night columns: a continuous stay bar (rounded at its
+// ends, location-labelled) across the columns it covers, a transfer node on its day, a red × where transport is missing.
+// Tokens come from itn.paxRoute() (the canonical route+gap model); this only POSITIONS them under the grid columns.
+function routeRowHTML(px, dates, route){
+  const col=paxGroupColor(px.group)||'var(--dim)';
+  const stays=route.filter(t=>t.kind==='stay'), xfers=route.filter(t=>t.kind==='transfer'), gaps=route.filter(t=>t.kind==='gap');
+  const dayStay=d=>stays.find(s=>s.start<=d&&d<=s.end);
+  const nightStay=(d,d2)=>stays.find(s=>s.start<=d&&s.end>=d2);
+  const dayXfer=d=>xfers.find(t=>t.date<=d&&d<=(t.end||t.date));
+  const gapAt=d=>gaps.some(g=>g.at===d);
+  const cell=(kind,d,d2)=>{
+    const stay=kind==='day'?dayStay(d):nightStay(d,d2);
+    let inner='';
+    if(stay){
+      const rl=kind==='day'&&stay.start===d?' rl':'', rr=kind==='day'&&stay.end===d?' rr':'';
+      const lbl=(kind==='day'&&stay.start===d)?`<span class="trkloc">${esc(stay.loc)}</span>`:'';
+      inner+=`<div class="trkbar${rl}${rr}" title="${esc(stay.name+' · '+stay.loc)}" onclick="selectUnit('${stay.id}')">${lbl}</div>`;
+    }
+    if(kind==='day'){
+      const xfer=dayXfer(d);
+      if(xfer) inner+=`<div class="trknode" title="${esc(xfer.name+' · '+xfer.from+' → '+xfer.to)}" onclick="event.stopPropagation();selectUnit('${xfer.id}')">→</div>`;
+      if(gapAt(d)) inner+=`<div class="trkgap" title="no transport — location change with no connecting transfer">×</div>`;
+    }
+    return `<td class="agtrk"><div class="trk">${inner}</div></td>`;
+  };
+  const cells=dates.map((d,i)=>cell('day',d)+(i<dates.length-1?cell('night',d,dates[i+1]):'')).join('');
+  const label=`<th class="agpx ribbon-lbl" style="border-left:3px solid ${col}" title="${esc((px.tag||px.name)+(px.fullName?' '+px.fullName:''))}"><span class="agtag">${esc(px.tag||px.name)}</span></th>`;
+  return `<tr class="agroute" onmouseover="paxHover('${px.id}')" onmouseleave="paxHover('')">${label}${cells}</tr>`;
+}
+// Route graph — every traveller's journey as a node/edge graph: shared legs merge into one path and a fork is exactly
+// where travellers SPLIT. Places are nodes, movements are edges:
+//   • a STAY node is keyed by accommodation SUPPLIER + LOCATION — ONE node per place, so EVERY traveller staying there
+//     (even via different line items on different dates) lands on it, while two camps of one supplier at different places
+//     stay separate (a transfer between them is then a real edge). Each contributing stay is
+//     kept on the node (its own start/end), so intersecting windows (group A in on the 1st, group B in on the 2nd and
+//     out a day earlier) show up as a day-coverage TABLE: a row per stay, a column per NIGHT, a filled cell = a night
+//     that stay covers. (Accommodation END is the checkout day — NOT a night — so the last day is never filled.)
+//   • a TRANSPORT / FLIGHT is an edge fromLocation → toLocation; a transit endpoint with no stay becomes a point (airport),
+//     kept distinct per day so a place visited twice (out of NBO day 1, back day 4) is two points, not a loop.
+//   • consecutive stays with no connecting transport get a dashed "no transport" edge.
+// Each edge carries the travellers on it; when that isn't everyone, their tags are shown — that's the split.
+// The view emits only the flowchart SOURCE; drawRouteGraph() renders it to SVG (Mermaid) async once the host is in the DOM.
+function routeGraphHTML(p){
+  const m=routeGraphModel(p); _rgNodeItems={};
+  if(!m||!m.nodes.length){ _rgDef1=null; return '<div class="hint">No stays or transfers to chart.</div>'; }
+  m.nodes.forEach(n=>{ const it=[...n.items][0]; if(it!=null) _rgNodeItems[n.id]=it; });   // node → the item to open on click
+  _rgDef1=routeGraphDef(m);
+  return `<div class="rgmermaid" id="rgmermaid1"><div class="hint">rendering route graph…</div></div>`+routeGraphLegend(p);
+}
+// Group the live pax into route nodes/edges (shared logic for both renderers). Returns {nodes,edges,allPax,tagOf}.
+// Walks each traveller's items chronologically; stays MERGE by place (one node per accommodation) so intersecting
+// windows collect on a single node, while transit points stay anchored in time so airports don't fold into loops.
+function routeGraphModel(p){
+  const live=u=>u.status!=='CANCELLED'&&u.pendingOp!=='REMOVE';
+  const STAY=['ACCOMMODATION'], MOVE=['TRANSPORT','FLIGHT'];
+  const isStay=u=>STAY.includes(u.type);
+  // chronological; on an equal start day a movement (arrival) sorts before the stay it delivers you to
+  const byTime=(a,b)=>a.startDate<b.startDate?-1:a.startDate>b.startDate?1:((isStay(a)?1:0)-(isStay(b)?1:0))||(String(a.id)<String(b.id)?-1:1);
+  const has=(p.items||[]).some(u=>live(u)&&u.startDate&&u.endDate&&(isStay(u)||MOVE.includes(u.type)));
+  if(!has) return null;
+  let nid=0; const nodes=new Map();
+  const supName=id=>(CFG.suppliers[id]&&CFG.suppliers[id].name)||id;
+  // a STAY is keyed by SUPPLIER + LOCATION → one node per place, gathering every traveller's stay there regardless of
+  // dates; keeping LOCATION in the key means two camps of the SAME supplier at different places stay separate nodes
+  // (so a transfer between them is a real edge, not a dropped self-loop). A TRANSIT endpoint is keyed by location@day.
+  const stayKey=u=>{ const loc=u.location||''; return u.supplierId?('S:sup:'+u.supplierId+(loc?'|loc:'+loc:'')):('S:loc:'+(loc||u.name||u.id)); };
+  const stayPlace=u=>u.supplierId?(supName(u.supplierId)+(u.location?' · '+u.location:'')):(u.location||u.name);
+  const ensure=(key,kind,place,date)=>{ let n=nodes.get(key); if(!n){ n={key,id:'n'+(nid++),kind,place,date,pax:new Set(),items:new Set(),stays:[]}; nodes.set(key,n);} return n; };
+  const transit=(loc,date,itemId)=>{ const k='T:'+(loc||'?')+'@'+date; const n=ensure(k,'point',loc||'?',date); if(itemId!=null) n.items.add(itemId); return k; };
+  const edges=new Map();   // "src>dst" -> {src,dst,pax:Set,labels:Set,gap}
+  const addEdge=(src,dst,pax,label)=>{ if(!src||!dst||src===dst) return; const k=src+'>'+dst; let e=edges.get(k); if(!e){ e={src,dst,pax:new Set(),labels:new Set(),gap:true}; edges.set(k,e);} if(pax!=null) e.pax.add(pax); if(label){ e.labels.add(label); e.gap=false; } };
+  const moveLabel=u=>(u.type==='FLIGHT'?'✈ ':'🚐 ')+(u.name||u.type);
+  p.pax.forEach(px=>{
+    const mine=(p.items||[]).filter(u=>live(u)&&u.startDate&&u.endDate&&(isStay(u)||MOVE.includes(u.type))&&(u.paxIds||[]).includes(px.id)).slice().sort(byTime);
+    let prevKey=null, prevLoc=null, pending=null;   // pending = a movement awaiting its arrival (resolved by the next stay / move)
+    const realize=()=>{ if(!pending) return; const tk=transit(pending.loc, pending.date, pending.id); addEdge(pending.fromKey, tk, px.id, pending.label); prevKey=tk; prevLoc=pending.loc; pending=null; };   // arrival had no stay → a transit point
+    mine.forEach(u=>{
+      if(isStay(u)){
+        const key=stayKey(u); const sn=ensure(key,'stay',stayPlace(u),u.startDate); sn.pax.add(px.id); sn.items.add(u.id);
+        if(!sn.stays.some(s=>s.id===u.id)) sn.stays.push({id:u.id,name:u.name,startDate:u.startDate,endDate:u.endDate});   // per-stay detail for the day-coverage table
+        if(pending){
+          if(pending.loc===u.location){ addEdge(pending.fromKey, key, px.id, pending.label); }
+          else { realize(); addEdge(prevKey, key, px.id, null); }   // the move landed elsewhere → dashed gap into the stay
+          pending=null;
+        } else if(prevKey && prevKey!==key){ addEdge(prevKey, key, px.id, null); }   // place change with no connecting transport
+        prevKey=key; prevLoc=u.location;
+      } else {                                                       // a movement leg → defer until we see where it lands
+        if(pending) realize();
+        let fromKey;
+        if(prevKey && prevLoc===u.fromLocation){ fromKey=prevKey; }
+        else { fromKey=transit(u.fromLocation, u.startDate, u.id); if(prevKey&&prevKey!==fromKey) addEdge(prevKey, fromKey, px.id, null); }
+        pending={ fromKey, loc:u.toLocation, date:(u.endDate||u.startDate), label:moveLabel(u), id:u.id };
+      }
+    });
+    realize();   // trailing movement → its arrival becomes a transit point
+  });
+  return { nodes:[...nodes.values()], edges:[...edges.values()], allPax:p.pax.length, tagOf:id=>{ const x=p.pax.find(q=>q.id===id); return x?(x.tag||x.name):id; } };
+}
+// Edge label: the movement label(s), or a "no transport" warning, plus the travellers' tags when only SOME of them are
+// on the leg (the split). Returns { text, gap }.
+function rgEdgeLabel(e, m){
+  const tags=(e.pax.size&&e.pax.size<m.allPax)?[...e.pax].map(m.tagOf).join(', '):'';
+  return e.gap ? { text:'⚠ no transport'+(tags?' · '+tags:''), gap:true }
+               : { text:[...e.labels].join(' / ')+(tags?' · '+tags:''), gap:false };
+}
+// Build the Mermaid flowchart source from the model. Returns the source string, or null.
+function routeGraphDef(m){
+  if(!m||!m.nodes.length) return null;
+  const q=s=>String(s==null?'':s).replace(/"/g,'').replace(/[\[\]{}|<>]/g,' ');   // keep labels safe inside a quoted flow node
+  const mmdd=d=>d?String(d).slice(5):'';                                          // ISO yyyy-mm-dd → mm-dd for the day suffix
+  const lines=["%%{init: {'theme':'dark','flowchart':{'htmlLabels':true,'curve':'basis'}}}%%",'flowchart LR',
+    // stay = indigo (NOT green — the day-coverage table inside uses green for covered nights, so a green node would clash); point = blue
+    '  classDef stay fill:#2a1e44,stroke:#7c5cd0,color:#ece4ff',
+    '  classDef point fill:#1c2a3d,stroke:#3d7ec0,color:#dbe9ff'];
+  m.nodes.forEach(n=>{
+    if(n.kind==='stay' && n.stays.length>1){   // several stays gathered on one node → a day-coverage table
+      lines.push(`  ${n.id}["${stayCoverageTable(n)}"]:::stay`); return;
+    }
+    const span=(n.kind==='stay'&&n.stays.length===1)?(mmdd(n.stays[0].startDate)+'→'+mmdd(n.stays[0].endDate)):mmdd(n.date);
+    const lbl=q(n.place)+'<br/>'+q(span);
+    lines.push(n.kind==='stay' ? `  ${n.id}("${lbl}"):::stay` : `  ${n.id}{{"${lbl}"}}:::point`);
+  });
+  const idOf={}; m.nodes.forEach(n=>idOf[n.key]=n.id);
+  m.edges.forEach(e=>{
+    const L=rgEdgeLabel(e,m); const lbl=q(L.text);
+    if(L.gap) lines.push(`  ${idOf[e.src]} -. "${lbl}" .-> ${idOf[e.dst]}`);
+    else lines.push(`  ${idOf[e.src]} -->|"${lbl}"| ${idOf[e.dst]}`);
+  });
+  // Click-to-open: a Mermaid `click` directive per node carrying an item (bound in drawOneGraph via bindFunctions,
+  // needs securityLevel:'loose'). rgNodeClick() reads _rgNodeItems (built in routeGraphHTML) and opens the item modal.
+  m.nodes.forEach(n=>{ if(_rgNodeItems[n.id]!=null) lines.push(`  click ${n.id} rgNodeClick`); });
+  return lines.join('\n');
+}
+// A stay node's day-coverage table: caption = place, one column per NIGHT from the earliest arrival to the latest
+// checkout, one row per stay, a filled cell = a night that stay covers. Accommodation END is the checkout DAY (not a
+// night), so a stay D1→D5 covers nights D1..D4 and the checkout column stays empty — and a zero-night stay is all empty.
+// Styled by CLASS (.rgtbl …), NOT inline styles — Mermaid's HTML-label sanitizer mangles inline style attributes.
+function stayCoverageTable(n){
+  const D=(typeof ITNY!=='undefined'&&ITNY.dates)?ITNY.dates:null;
+  const dn=D?D.dayNum:(()=>0), isoFor=D?D.isoForDay:(d=>String(d));
+  const mmdd=d=>String(d).slice(5);
+  const safe=s=>String(s==null?'':s).replace(/["\[\]{}|<>]/g,' ');
+  const stays=n.stays.slice().sort((a,b)=> a.startDate<b.startDate?-1:a.startDate>b.startDate?1:(a.endDate<b.endDate?-1:a.endDate>b.endDate?1:(String(a.id)<String(b.id)?-1:1)));
+  const startDay=Math.min(...stays.map(s=>dn(s.startDate))), endExcl=Math.max(...stays.map(s=>dn(s.endDate)));   // checkout = exclusive
+  const nights=[]; for(let d=startDay; d<endExcl && nights.length<60; d++) nights.push(d);   // one column per night
+  const hdr='<tr><th></th>'+nights.map(d=>`<th>${mmdd(isoFor(d))}</th>`).join('')+'</tr>';
+  // cells carry only a class: `.rgtbl td` is empty (dark, so it reads as empty over the node's indigo fill) and
+  // `.rgtbl td.rgon` is covered (bright green). No inline styles → nothing for Mermaid's label sanitizer to mangle.
+  const body=stays.map(s=>{ const a=dn(s.startDate), b=dn(s.endDate);   // this stay covers nights [a, b)
+    const cells=nights.map(d=>`<td${(d>=a&&d<b)?" class='rgon'":''}></td>`).join('');
+    return `<tr><th class='rgrl'>${safe(s.name)}</th>${cells}</tr>`;
+  }).join('');
+  return `<table class='rgtbl'><caption>${safe(n.place)}</caption>${hdr}${body}</table>`;
+}
+// Caption under the graphs: a glyph key + a note that partial-pax edges name their travellers (the split points).
+function routeGraphLegend(p){
+  return `<div class="rgkey"><span><b>● place</b> = accommodation (one node per supplier + location)</span><span><b>⬡ point</b> = transit / airport</span><span><b>▦ table</b> = several travellers at one place (a row per stay · filled = nights covered · checkout day blank)</span><span><b>→</b> transfer · flight (from→to)</span><span><b style="color:var(--bad)">⤍ no transport</b></span><span>an edge names its travellers when not everyone is on it — that's a split</span><span><b>click a node</b> → open its item</span></div>`;
+}
+// Render the route graph (called post-DOM whenever the graph tab is shown). Mermaid → SVG.
+async function drawRouteGraph(){
+  if(typeof mermaid!=='undefined' && !_mermaidInit){ try{ mermaid.initialize({startOnLoad:false, theme:'dark', securityLevel:'loose'}); }catch(e){} _mermaidInit=true; }   // 'loose' so node click callbacks bind
+  await drawOneGraph('rgmermaid1', _rgDef1);
+}
+// Render the Mermaid source into its host as SVG. Async + fully guarded so a missing library (offline / headless) or a
+// bad diagram degrades to a readable message + the raw source. bindFunctions wires the `click` directives.
+async function drawOneGraph(hostId, def){
+  const host=document.getElementById(hostId); if(!host) return;
+  if(!def){ host.innerHTML='<div class="hint">No stays or transfers to chart.</div>'; return; }
+  if(typeof mermaid==='undefined'){ host.innerHTML='<div class="hint">Mermaid library unavailable (needs internet on first open).</div><pre class="rgsrc">'+esc(def)+'</pre>'; return; }
+  try{ const {svg,bindFunctions}=await mermaid.render('rg-svg-'+(_rgSeq++), def); host.innerHTML=svg; if(bindFunctions) bindFunctions(host); }
+  catch(e){ host.innerHTML='<div class="hint">Could not render route graph: '+esc(e&&e.message||e)+'</div><pre class="rgsrc">'+esc(def)+'</pre>'; }
+}
+// Click a route-graph node → open the item it represents (a stay's accommodation line, or the transfer that defines a transit point).
+function rgNodeClick(nodeId){ const id=_rgNodeItems[nodeId]; if(id!=null) selectUnit(id); }
+
+const GROUP_LABEL={ build:'● Build', change:'● Change', transition:'● Transition to', documents:'● Documents', payments:'● Payments', flags:'● Other', lifecycle:'● Seller — lifecycle', terminal:'● Terminal' };
+// itinerary-action group render order, and the "→ STATUS" transition order (terminal trio after a separator).
+const GROUP_ORDER=['build','change','transition','documents','payments','flags'];
+const TRANS_ORDER=['revert','prepare','convertToItinerary','toQuoted','accept','toInvoiced','voucher','confirm','lost','superseded','cancelItn'];
+const TRANS_TERMINAL=['lost','superseded','cancelItn'];
+function actRow(a, labelOverride){
+  const en=a.isAllowed().ok;
+  // labelOverride is optional; guard against Array.map passing the index as the 2nd arg (must be a string to apply).
+  const lbl = typeof labelOverride==='string' ? labelOverride : a.description;
+  return `<div class="act ${en?'ok':'no'}" onmouseover="actHover('${a.id}')" onmouseleave="actClear()" ${en?`onclick="runAction('${a.id}')"`:''}>
+    <span class="mk">${en?'✓':'✕'}</span><span class="lbl">${esc(lbl)}</span><span class="rid">${esc(a.ruleId||'')}</span><span class="info">ⓘ</span></div>`;
+}
+// Status picker: every item status-transition (a.statusTx) as a vertical "→ TARGET" row (same look as actRow).
+// Enabled ones run the typed registry action; blocked ones show ✕ and explain why on hover (✓*/✗ semantics).
+function statusPickerHTML(){
+  const ORDER=['NEW','CONFIRMED','CANCELLED'];   // canonical item-status display order
+  return acts().filter(a=>a.category==='item' && a.statusTx && !a.hidden).sort((x,y)=>ORDER.indexOf(x.statusTx)-ORDER.indexOf(y.statusTx)).map(a=>{
+    const v=a.isAllowed(); const en=v.ok;
+    const tip=esc(v.why||'').replace(/"/g,'&quot;');
+    return `<div class="act ${en?'ok':'no'}" title="${tip}" onmouseover="actHover('${a.id}')" onmouseleave="actClear()" ${en?`onclick="runAction('${a.id}')"`:''}>
+      <span class="mk">${en?'✓':'✕'}</span><span class="lbl">→ ${esc(a.statusTx)}</span><span class="rid">${esc(a.ruleId||'')}</span><span class="info">ⓘ</span></div>`;
+  }).join('');
+}
+// Render specific itinerary actions as rows (used to place the build actions next to the data they create:
+// Add service in the Services card; Add / Remove traveller in the Travellers card).
+function actListHTML(ids){
+  const rows=ids.map(id=>{ const a=actById(id); return (a&&!a.hidden)?actRow(a):''; }).join('');
+  return rows?`<div class="actgrp grp-build" style="margin-top:8px">${rows}</div>`:'';
+}
+function lifeActionsHTML(){
+  // itinerary actions + the "open change" start; change cycle lives in the pending card, credit notes + record-payment
+  // in the payments card, document-generation in the documents card, milestones in their own schedule, and the build
+  // actions (add service / add+remove traveller) next to the Services & Travellers data they create.
+  const list=acts().filter(a=>((a.category==='itny' && !['creditNotes','milestones','documents','payments','build'].includes(a.group)) || a.id==='openChange') && !a.hidden);
+  const groups={};
+  list.forEach(a=>{ (groups[a.group]=groups[a.group]||[]).push(a); });
+  // render groups in the canonical order, then any unlisted group after them.
+  const order=GROUP_ORDER.filter(g=>groups[g]).concat(Object.keys(groups).filter(g=>!GROUP_ORDER.includes(g)));
+  const idOrder=(g,a)=>{ if(g!=='transition') return 0; const i=TRANS_ORDER.indexOf(a.id); return i<0?TRANS_ORDER.length:i; };
+  return order.map(g=>{
+    const rows=groups[g].slice().sort((x,y)=>idOrder(g,x)-idOrder(g,y));
+    // in the transition group, drop a separator in front of the terminal trio (→ LOST / SUPERSEDED / CANCELLED).
+    const body=rows.map(a=>(g==='transition' && a.id===TRANS_TERMINAL[0] ? '<div class="actsep"></div>' : '')+actRow(a)).join('');
+    return `<div class="actgrp grp-${g}"><div class="ah">${GROUP_LABEL[g]||('● '+g)}</div>${body}</div>`;
+  }).join('');
+}
+
+function pendingHTML(p){
+  if(!itn.inChange()) return '';
+  const isCxl=itn.isCancelling(), isDraft=itn.isDraftChange();
+  // a draft change (DRAFT itinerary) or a cancellation is Apply/Cancel only; otherwise the full cycle.
+  const cycle=acts().filter(a=>a.group==='changeCycle' && ((isCxl||isDraft) ? ['cApply','cCancel'].includes(a.id) : true));
+  const staged=itn.staged();
+  const ov=(a,b)=>`<span class="o">${fmt(a)}</span> → <span class="n">${fmt(b)}</span>`;   // OLD → NEW
+  // staged deposit/milestone edits (money-only changes stage no unit) — render them as their own pending row.
+  const cs=itn.changeSet, moneyRows=[];
+  if(cs.depositBaseline){
+    const b=cs.depositBaseline, d=itn.deposit;
+    const da=x=>x==null?'system':'$'+x;
+    if(b.manualAmt!==d.manualAmt) moneyRows.push(`deposit amount: ${ov(da(b.manualAmt),da(d.manualAmt))}`);
+    if(b.manualDue!==d.manualDue) moneyRows.push(`deposit due: ${ov(b.manualDue==null?'system':'D'+b.manualDue,d.manualDue==null?'system':'D'+d.manualDue)}`);
+    if(b.skip!==d.skip) moneyRows.push(`deposit: ${ov(b.skip?'skipped':'active',d.skip?'skipped':'active')}`);
+  }
+  if(cs.milestonesBaseline && JSON.stringify(cs.milestonesBaseline)!==JSON.stringify(itn.paymentMilestones)){
+    const bc=cs.milestonesBaseline.filter(m=>m.custom).length, nc=itn.paymentMilestones.filter(m=>m.custom).length;
+    moneyRows.push(`custom milestones: ${ov(bc,nc)}`);
+  }
+  const moneyHTML=moneyRows.length?`<div class="pend-row"><div class="ptop"><span class="badge b-op">💳 payments</span><b>deposit / milestones</b></div>${moneyRows.map(r=>`<div class="diff">${r}</div>`).join('')}</div>`:'';
+  const stagedUnitsHTML = staged.map(u=>{
+      const cl=u.committedLife;
+      const opLabel=u.requestOnApply ? '⇪ request' : (u.pendingOp ? (OPSYM[u.pendingOp]||u.pendingOp) : '↻ status');
+      const rows=[];
+      // spec field edits (dates, price, pax, qty…) as field: OLD → NEW
+      if(u.pendingOp) itn.stagedDiff(u).forEach(d=>fieldDiffRows(d.f,d.before,d.after).forEach(r=>rows.push(r)));
+      // status change OLD → NEW (e.g. NEW → CONFIRMED)
+      if(cl && cl.status!==u.status) rows.push(`status: ${ov(cl.status,u.status)}`);
+      if(u.pendingOp==='CANCEL' && u.cancelIntent) rows.push(`cancel: fee $${u.cancelIntent.fee} / refund $${u.cancelIntent.refund} <span class="hint">(posts on Apply)</span>`);
+      if(u.requestOnApply) rows.push(`<span class="hint">↳ supplier voucher raised on Apply</span>`);
+      return `<div class="pend-row"><div class="ptop"><span class="badge b-op">${opLabel}</span><b>${esc(u.name)}</b> <span class="hint">${u.id}</span></div>
+        ${rows.map(r=>`<div class="diff">${r}</div>`).join('')}</div>`;
+    }).join('');
+  const stagedHTML = (staged.length || moneyRows.length)
+    ? stagedUnitsHTML + moneyHTML
+    : `<div class="hint" style="padding:4px 0">No edits staged yet. Open a service/extra to Cancel / Remove / Set price, add a service, or edit the deposit / a milestone.</div>`;
+  const rejWarn=itn.unresolvedRejection()?'<div class="hb-why no" style="color:var(--bad);font-size:11px">Unresolved supplier rejection — resolve it before Apply.</div>':'';
+  const vWarn=(!isCxl && itn.changeNeedsVoucher())?'<div class="hb-why" style="color:var(--rec);font-size:11px">Apply will generate supplier vouchers automatically (confirm on the Apply form).</div>':'';
+  // Informational (never blocks Apply): selected promotions that no longer match — so the user notices before applying.
+  const um=p.promotionsUnmatched||[];
+  const promoWarn=um.length?`<div class="pend-row" style="border-color:var(--warn)"><div class="ptop"><span class="badge b-warn">⚠ promotions</span><b>not matching (${um.length})</b></div>${um.map(x=>`<div class="diff"><span class="upromo no" style="cursor:pointer" onclick="openPromo('${x.id}')">🏷 ${esc(x.name)}</span> <span class="hint">— ${x.members.map(m=>esc(m.name)).join(', ')||'no services'} · applies nothing; review before Apply (not blocking)</span></div>`).join('')}</div>`:'';
+  const s=itn.summary();
+  const totalLine=changeChipsHTML(s);
+  // Editable payment schedule — adjust the deposit / milestones here before Apply (read-only in the Payments card).
+  // Deposit is always reachable: when skipped it has no schedule row, so offer "Edit deposit" in the footer.
+  let scheduleHTML='';
+  if(!p.isBrochure){
+    const ms=p.milestones||[], addMs=actById('milestoneAdd'), depEd=actById('depositEdit'), depSkipped=p.deposit&&p.deposit.skip;
+    const addBtn=(addMs&&addMs.isAllowed().ok)?`<button class="hbtn" onclick="runAction('milestoneAdd')">+ Add milestone</button>`:`<span class="hint">${addMs?esc(addMs.isAllowed().why):''}</span>`;
+    const depBtn=(depSkipped&&depEd&&depEd.isAllowed().ok)?`<button class="hbtn" onclick="runAction('depositEdit')">Edit deposit (skipped)</button> `:'';
+    scheduleHTML=`<div class="actgrp grp-payments" style="margin-top:8px"><div class="ah">● Payment schedule <span class="hint">(adjust before Apply)</span></div>${ms.map(m=>milestoneRowHTML(m,true)).join('')}<div style="margin-top:6px">${depBtn}${addBtn}</div></div>`;
+  }
+  const cycleHTML=`<div class="actgrp grp-changeCycle" style="margin-top:12px"><div class="ah">● ${isCxl?'Cancellation cycle':(isDraft?'Draft change — Apply / Cancel only':'Change cycle')}</div>`+cycle.map(actRow).join('')+`</div>`;
+  return `<div class="card"><h2>Pending changes — ${itn.changeSet.trigger} · ${itn.pendingStatus}</h2>${totalLine}${stagedHTML}${promoWarn}${scheduleHTML}${rejWarn}${vWarn}${cycleHTML}</div>`;
+}
+function fmt(v){ return v===undefined?'∅':(typeof v==='object'?JSON.stringify(v):String(v)); }
+// Simplified one-field diff, shared by the line card, item modal and pending panel. Keeps the noise down:
+//  • an object field (e.g. itemManualPrice) shows ONLY the sub-keys that actually changed;
+//  • a paxIds array shows the count plus added (+TAG) / removed (−TAG) travellers, not the raw id arrays;
+//  • scalars show old → new.
+// The full before/after is tucked into a title so the detail is one hover away (dotted underline = hover for detail).
+function fieldDiffRows(f, before, after){
+  const ov=(a,b)=>`<span class="o">${esc(fmt(a))}</span> → <span class="n">${esc(fmt(b))}</span>`;
+  const isObj=x=>x&&typeof x==='object'&&!Array.isArray(x);
+  if(f==='promotionIds' && Array.isArray(before) && Array.isArray(after)){
+    const nm=id=>{ const p=(itn.promotions||[]).find(x=>x.id===id); return p?p.name:id; };
+    const added=after.filter(x=>!before.includes(x)).map(nm), removed=before.filter(x=>!after.includes(x)).map(nm);
+    if(!added.length && !removed.length) return [];
+    const chg=[...added.map(t=>`<span class="n">+${esc(t)}</span>`),...removed.map(t=>`<span class="o">−${esc(t)}</span>`)].join(' ');
+    return [`promotions: ${chg}`];
+  }
+  if(f==='paxIds' && Array.isArray(before) && Array.isArray(after)){
+    const tag=id=>{ const p=itn.pax.find(x=>x.id===id); return p?(p.tag||p.name):id; };
+    const added=after.filter(x=>!before.includes(x)).map(tag), removed=before.filter(x=>!after.includes(x)).map(tag);
+    const chg=[...added.map(t=>`<span class="n">+${esc(t)}</span>`),...removed.map(t=>`<span class="o">−${esc(t)}</span>`)].join(' ');
+    const title=`before: ${before.map(tag).join(', ')||'—'}\nafter: ${after.map(tag).join(', ')||'—'}`;
+    return [`<span class="dhint" title="${esc(title)}">pax ${before.length} → ${after.length}</span>${chg?' · '+chg:''}`];
+  }
+  if(isObj(before)&&isObj(after)){
+    const keys=Array.from(new Set([...Object.keys(before),...Object.keys(after)]));
+    const changed=keys.filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k]));
+    if(changed.length) return changed.map(k=>`${esc(f)}.${esc(k)}: ${ov(before[k],after[k])}`);
+    return [`<span class="dhint" title="${esc(fmt(before)+' → '+fmt(after))}">${esc(f)} (changed)</span>`];
+  }
+  return [`${esc(f)}: ${ov(before,after)}`];
+}
+// staged change on a line rendered as OLD → NEW rows (shared by the list, item modal and pending panel)
+function changeRowsHTML(ch){
+  if(!ch) return [];
+  const ov=(a,b)=>`<span class="o">${esc(fmt(a))}</span> → <span class="n">${esc(fmt(b))}</span>`;
+  const rows=[];
+  (ch.fields||[]).forEach(d=>{ fieldDiffRows(d.f,d.before,d.after).forEach(r=>rows.push(r)); });
+  if(ch.status) rows.push(`status: ${ov(ch.status.before, ch.status.after)}`);
+  if(ch.holds){
+    // Human-readable hold diff: an added hold ("Hold: — → HELD (expires D7)") or a flipped one
+    // ("Hold H1: HELD → RELEASED"). Derived from the before/after arrays — no business logic here.
+    const before=ch.holds.before||[], after=ch.holds.after||[];
+    const byId=(arr)=>arr.reduce((m,h)=>{m[h.id]=h;return m;},{});
+    const b=byId(before), a=byId(after);
+    const ids=Array.from(new Set([...before.map(h=>h.id),...after.map(h=>h.id)]));
+    const hl=(h)=>h?`${esc(h.status)}${h.expiresAt?` (expires ${esc(h.expiresAt)})`:''}`:'—';
+    ids.forEach(id=>{
+      if(JSON.stringify(b[id]||null)===JSON.stringify(a[id]||null)) return;
+      const label=(b[id]&&a[id])?`Hold ${esc(id)}`:'Hold';
+      rows.push(`${label}: <span class="o">${hl(b[id])}</span> → <span class="n">${hl(a[id])}</span> <span class="hint">(on Apply)</span>`);
+    });
+  }
+  if(ch.nextStatus) rows.push(`→ <span class="n">${esc(ch.nextStatus)}</span> <span class="hint">(on Apply)</span>`);
+  if(ch.cancelIntent) rows.push(`cancel: fee $${ch.cancelIntent.fee} / refund $${ch.cancelIntent.refund} <span class="hint">(posts on Apply)</span>`);
+  if(ch.requestOnApply) rows.push(`<span class="hint">↳ supplier voucher raised on Apply</span>`);
+  if(ch.confirmOnApply) rows.push(`<span class="hint">↳ supplier voucher raised &amp; confirmed on Apply</span>`);
+  // informational (does NOT block Apply): selected promotions that no longer match the current itinerary
+  if(ch.promosUnmatched) ch.promosUnmatched.forEach(pm=>rows.push(`<span class="badge b-warn">⚠ promo no longer matches</span> ${esc(pm.name)} <span class="hint">(applies nothing — review before Apply; not blocking)</span>`));
+  return rows;
+}
+
+// Open the Edit-milestone form pre-targeted at one milestone (id locked; other fields editable from defaults).
+function editMilestone(id){ const a=actById('milestoneEdit'); if(a) openForm(a,{id}); }
+// One row of the payment-milestone schedule (deposit / custom / outstanding), accent-coloured.
+// Layout: due → amount → the rest (kind, %, comment, status). Row-edit buttons only when `editable`
+// (the schedule is read-only in the Payments card; edits are staged from the Pending-changes view).
+function milestoneRowHTML(m, editable){
+  const col=mAccentColor(m.accent);
+  const kindBadge={DEPOSIT:'b-st',CUSTOM:'b-good',OUTSTANDING:'b-dim',OUTSTANDING_RECORDED:'b-good',REFUND:'b-rec'}[m.kind]||'b-dim';
+  const kindLabel=m.kind==='OUTSTANDING_RECORDED'?'outstanding · settled':m.kind.toLowerCase();
+  const paidBadge=m.paid?'<span class="badge b-good">paid</span>':`<span class="badge" style="border-color:${col};color:${col}">${m.daysLeft!=null?m.daysLeft+'d':'due'}</span>`;
+  const refund=m.type==='REFUND_TO_CLIENT';
+  // Per-row settlement (item 6): how much of THIS milestone is covered — e.g. deposit 100%, an outstanding slice 30%,
+  // the live outstanding 0% — plus the remaining $ on a partly-paid RECEIVE row.
+  const pctPaid=m.paidPct!=null?m.paidPct:(m.paid?100:0);
+  const settle=`<span class="hint" title="paid vs this milestone">${pctPaid}% paid${(!refund&&m.remainingAmt>0)?` · $${m.remainingAmt} left`:''}</span>`;
+  let btns='';
+  if(editable){
+    if(m.kind==='DEPOSIT'){ const ed=actById('depositEdit'); if(ed&&ed.isAllowed().ok) btns=`<button class="hbtn" onclick="runAction('depositEdit')">Edit</button>`; }
+    else if(m.kind==='CUSTOM'){
+      const e=actById('milestoneEdit'), r=actById('milestoneRemove');
+      if(e&&m.editable) btns+=`<button class="hbtn" onclick="editMilestone('${m.id}')">Edit</button> `;
+      if(r&&m.removable) btns+=`<button class="hbtn" onclick="runAction('milestoneRemove',{id:'${m.id}'})">Remove</button>`;
+    }
+  }
+  return `<div class="lirow" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid #1c2230">
+    <span><span class="hint">due ${m.dueLabel}</span> <b class="num" style="color:${refund?'var(--rec)':'inherit'}">${refund?'− ':''}$${m.amt}</b> <span class="badge ${kindBadge}">${kindLabel}</span> ${refund?'<span class="op op-CANCEL">refund</span> ':''}<span class="hint">${m.prcOfTotal||0}% of total</span> · ${settle}${m.comment?` <span class="hint">${esc(m.comment)}</span>`:''}</span>
+    <span>${paidBadge} ${btns}</span></div>`;
+}
+function paymentsHTML(p){
+  const pays=p.payments||[];
+  const t=p.totals||{}, dep=p.deposit||{}, ms=p.milestones||[];
+  const head=`<div class="chips" style="margin-bottom:9px"><div class="chipgrp"><span class="gl">payment</span>
+    <span class="chip"><span class="k">status</span><b>${itn.paymentStatus}</b></span>
+    <span class="chip"><span class="k">paid</span><b class="num">$${t.paid||0}</b></span>
+    <span class="chip"><span class="k">due</span><b class="num">$${t.due||0}</b></span>
+    <span class="chip"><span class="k">deposit</span><b class="num">${dep.skip?'skipped':'$'+(dep.amt||0)}</b>${dep.paid?' <span class="badge b-good">paid</span>':''}${dep.custom?' <span class="badge b-st">manual</span>':''}</span>
+  </div></div>`;
+  // Payment-milestone schedule: deposit → custom slices → dynamic outstanding. Σ unpaid === total − paid.
+  // READ-ONLY here — the deposit / milestones are adjusted from the Pending-changes view (staged, then applied).
+  const msHTML=`<div class="actgrp grp-payments"><div class="ah">● Payment schedule <span class="hint">(read-only · Σ unpaid = outstanding $${t.due||0})</span></div>${ms.map(m=>milestoneRowHTML(m,false)).join('')}</div>`;
+  // Record client payment lives here (was in the itinerary-actions list).
+  const recAct=acts().filter(a=>a.group==='payments' && !a.hidden);
+  const recHTML = recAct.length ? `<div class="actgrp grp-payments"><div class="ah">● Record payment</div>${recAct.map(actRow).join('')}</div>` : '';
+  // credit-note actions (inter-itinerary money) live here, not in the itinerary-actions list.
+  const cn=acts().filter(a=>a.group==='creditNotes');
+  const cnHTML = cn.length ? `<div class="actgrp grp-payments"><div class="ah">● Credit notes (between itineraries)</div>${cn.map(actRow).join('')}</div>` : '';
+  const payRows = pays.length ? pays.map(x=>{
+    const neg=x.amount<0, amt=neg?'− $'+(-x.amount):'$'+x.amount;
+    const cls=neg?'b-rec':'b-good';
+    return `<div class="lirow" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid #1c2230">
+      <span><span class="hint num" style="min-width:30px;display:inline-block">${x.t||''}</span> <span class="badge ${cls}">${x.type}</span></span>
+      <b class="num" style="color:${neg?'var(--rec)':'var(--good)'}">${amt}</b></div>`;
+  }).join('') : '<div class="hint">No payments recorded yet. Use “Record client payment” once invoiced.</div>';
+  const payHTML=`<div class="actgrp grp-payments"><div class="ah">● Recorded payments</div>${payRows}</div>`;
+  return head+msHTML+recHTML+cnHTML+payHTML;
+}
+
+function logHTML(){ return `<div class="log">`+itn.history.map(e=>`<div class="logrow"><span class="t">${e.t}</span><span class="a">${e.a}</span><span>${esc(e.m)}</span></div>`).join('')+`</div>`; }
+// Versions: one immutable snapshot per applied pending change (newest first). Each row expands to the stored dbDocument().
+function versionsHTML(){
+  const vs=itn.versions||[];
+  if(!vs.length) return `<div class="hint">No versions yet — apply a pending change to snapshot the itinerary.</div>`;
+  return `<div class="log">`+vs.slice().reverse().map(v=>`<details class="vrow"><summary><span class="t">v${v.ver}</span> <span class="a">${esc(v.at)}</span> <span>${esc(v.label)}</span></summary><pre class="vjson">${esc(JSON.stringify(v.doc,null,2))}</pre></details>`).join('')+`</div>`;
+}
+
+// Debug JSON panel — tabs are driven by the getViews() query catalogue (itinerary-scope views),
+// plus the composed Edit-list special (trigger + status + staged edits).
+function jsonHTML(){
+  const vs=itn.getViews().filter(v=>v.scope==='itinerary');
+  const tabs=vs.map(v=>[v.id,v.description]).concat([['editlist','Edit-list']]);
+  const bar=`<div class="tabs">`+tabs.map(t=>`<button class="${jsonTab===t[0]?'on':''}" onclick="jsonTab='${t[0]}';render()">${esc(t[1])}</button>`).join('')+`</div>`;
+  let data;
+  if(jsonTab==='editlist') data={trigger:itn.changeSet?itn.changeSet.trigger:null, status:itn.pendingStatus, edits:itn.changeEdits()};
+  else { const v=vs.find(x=>x.id===jsonTab)||vs.find(x=>x.id==='dbDocument'); data=v?v.run():itn.dbDocument(); }
+  return bar+`<pre class="json">${esc(JSON.stringify(data,null,2))}</pre>`;
+}
+
+/* ---------- item modal ---------- */
+function selectUnit(id){ modalUnitId=id; itn.select(id); render(); }
+function closeItemModal(){ modalUnitId=null; itn.select(null); render(); }
+function setItemTab(t){ itemTab=t; render(); }
+// Rate-card composition (per pax / per unit NET + rack, plus the provided sell when the rate card carries one) — the
+// build-up of the system net, folded under the engine chain (the chain owns the totals; this is the per-cell detail).
+function rateCardHTML(u){
+  const pr=u.price; if(!pr) return '';
+  const rt=u.rateType||{chargeType:'Person',timeUnit:'Night'};
+  const unitLbl=rt.timeUnit==='Stay'?'stay':(rt.timeUnit==='Day'?'day':'night');
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`;
+  const sp=pr.systemPrice, sysT=sp.total;
+  const sysUnit=((sp.unitPrices||[]).find(x=>x.idx==null)||(sp.unitPrices||[])[0]||{price:sysT});
+  const cell=(p)=>`net $${p.net} · rack $${p.rack}${pr.sellProvided&&p.sell!=null?` · <span style="color:var(--good)">sell $${p.sell}</span>`:''}`;
+  if(sp.paxPrices&&sp.paxPrices.length){
+    return sp.paxPrices.map(pp=>{const c=(pr.paxCounts&&pr.paxCounts[pp.type])||0; return kv(`${pp.type} ×${c} / ${unitLbl}`,cell(pp.price));}).join('');
+  }
+  return kv(`per ${unitLbl} (unit)`,cell(sysUnit.price));
+}
+// Manual pricing — ONLY when the seller set a manual lever (custom total / per-line sell / manual margin), read from
+// pr.manual. A FLAT custom total shows just the flat rate; a custom rate/margin shows a system-price-style build-up
+// (purchase → + CPS margin → + TC → manual sell) that IGNORES uplift. Empty otherwise (divider/header are skipped).
+function manualPricingHTML(u){
+  const pr=u.price, mn=pr&&pr.manual; if(!pr||!mn) return '';
+  const rt=u.rateType||{chargeType:'Person',timeUnit:'Night'};
+  const unitLbl=rt.timeUnit==='Stay'?'stay':(rt.timeUnit==='Day'?'day':'night');
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`;
+  const head=`<div class="hint" style="margin:1px 0 2px">${pr.rateTitle} · ${rt.chargeType}/${rt.timeUnit}</div>`;
+  // FLAT custom total is a single number with no per-unit/per-pax basis, so drop the rate-basis head entirely
+  // (rateTitle is the PPPN/PUPN charge·unit abbreviation, meaningless for a flat sell).
+  if(mn.kind==='flat') return kv('custom total sell',`<b>$${mn.sell}</b> <span class="hint">(flat — overrides the engine)</span>`);
+  // breakdown — system-style build-up, NO uplift. base==='rate' → the entered per-line rates total ("manual total rate");
+  // base==='net' → the system net (purchase price). The CPS margin + TC are calc'd FROM that base.
+  const onRate=mn.base==='rate', mb=mn.breakdown; let rows='';
+  if(onRate&&mb&&mb.paxPrices&&mb.paxPrices.length){
+    rows=mb.paxPrices.map(pp=>{const c=(pr.paxCounts&&pr.paxCounts[pp.type])||0; return kv(`${pp.type} ×${c} / ${unitLbl}`,`rate $${pp.price.sell}`);}).join('');
+  } else if(onRate&&mb&&mb.unitPrices&&mb.unitPrices.length){
+    const mu=mb.unitPrices.find(x=>x.idx==null)||mb.unitPrices[0];
+    rows=kv(`per ${unitLbl} (unit)`,`rate $${mu?mu.price.sell:0}`);
+  }
+  let chain=onRate
+    ? kv('manual total rate',`<b>$${mn.manualTotalRate}</b> <span class="hint">seller rate (base)</span>`)
+    : kv('purchase price',`<b>$${mn.purchaseNet}</b> <span class="hint">supplier sell price (= net)</span>`);
+  chain+=kv(`+ CPS margin ${mn.cpsMargin}%`,`$${mn.cpsAmount}`);
+  chain+=mn.tcEnabled?kv(`+ TC commission ${mn.tcRate}%`,`$${mn.tcAmount}`):kv('+ TC commission',`<span class="badge b-dim">none</span>`);
+  chain+=`<div class="kv" style="border-top:1px solid var(--line);padding-top:4px"><span class="k"><b>manual sell</b></span><span><b style="color:var(--good)">$${mn.sell}</b> <span class="hint">(no uplift)</span></span></div>`;
+  return head+rows+chain;
+}
+// SELL (CLIENT) breakdown — expandable; its summary IS the headline (effective) client sell. Expanding reveals, in
+// order: the rate-card composition → the SYSTEM PRICE (the pure price-engine build-up: net → purchase → CPS margin +
+// TC → sum → uplift → system sell) → manual pricing (only when a manual lever is set; flat or a no-uplift build-up).
+// The system price is shown AS-IS and is never moved by a manual lever; manual pricing wins for the actual client sell.
+// The rack CEILING is uplifted with the sell so the over/under-price flags stay apples-to-apples. When the rate card
+// already carries a sell (seller margin baked in) the CPS margin is shown as "incl." (its effective %), not added on top.
+function priceBreakdownHTML(u){
+  const pr=u.price; if(!pr) return `<div class="kv"><span class="k">sell (client)</span><span><b>$${u.sellPrice||0}</b></span></div>`;
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`;
+  const purchase=pr.purchaseNet!=null?pr.purchaseNet:pr.totalNet;
+  const upRow=!!pr.upliftApplied;                              // a hypothetical (engine) line always shows the uplift row
+  const rackMoved=(pr.upliftFactor||1)!==1;                    // the uplift actually changed the rack ceiling (≥1 year out)
+  const rackEff=pr.rackCeiling!=null?pr.rackCeiling:pr.totalRack;
+  // the SYSTEM engine chain, top (rack ceiling) to bottom (system sell) — purchase, additive + CPS margin / + TC, the
+  // pre-uplift SUM, the uplift, and the system sell. hypothetical badge prefixes BOTH the rack ceiling and the net.
+  const hypo=u.hypothetical?'<span class="badge b-warn">hypothetical</span> ':'';
+  const effYears=Math.max(1, pr.upliftYears||0);                          // uplift always applies ≥ 1 year for a hypothetical line
+  let chain=kv('rack (ceiling)',`${hypo}<span class="hint">$${rackEff}${rackMoved?` (rack $${pr.totalRack} × ${(pr.upliftFactor||1).toFixed(3)})`:''}</span>`);
+  chain+=kv('net (supplier)',`${hypo}$${pr.totalNet}`);
+  chain+=kv('purchase price',`<b>$${purchase}</b> <span class="hint">supplier sell price (= net)</span>`);
+  chain+=pr.sellProvided
+    ? kv('+ CPS margin (incl.)',`$${pr.cpsAmount} <span class="hint">baked into provided sell</span>`)
+    : kv(`+ CPS margin ${pr.cpsMargin}%`,`$${pr.cpsAmount}`);
+  chain+=pr.tcEnabled?kv(`+ TC commission ${pr.tcRate}%`,`$${pr.tcAmount}`):kv('+ TC commission',`<span class="badge b-dim">none (Agent A)</span>`);
+  if(pr.tcEnabled) chain+=`<div class="kv" style="border-top:1px solid var(--line);padding-top:4px"><span class="k"><b>sum</b></span><span><b>$${pr.lastContractedSell}</b> <span class="hint">purchase + margin + TC</span></span></div>`;
+  if(upRow) chain+=kv(`+ uplift ${pr.upliftRate}%`,`+$${pr.upliftAmount} <span class="hint">${pr.upliftRate}%${effYears!==1?` × ${effYears}y`:''}</span>`);
+  chain+=`<div class="kv" style="border-top:1px solid var(--line);padding-top:4px"><span class="k"><b>system sell</b></span><span><b style="color:var(--good)">$${pr.systemSell}</b></span></div>`;
+  const rc=rateCardHTML(u), mp=manualPricingHTML(u);
+  const sect=(label,body)=>`<div class="hint" style="margin:9px 0 2px;color:var(--acc)">${label}</div><div class="idetail">${body}</div>`;
+  // Inline (no toggle). Order: rate card (net composition) → system price (engine chain) → manual pricing (only if set).
+  return `<div class="pricedet" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">`
+    +(rc?sect('rate card (net composition)',rc):'')
+    +sect('system price',chain)
+    +(mp?sect('manual pricing',mp):'')
+    +`</div>`;
+}
+function itemModalHTML(p){
+  if(!modalUnitId) return '';
+  const u=findView(p,modalUnitId); if(!u) return '';
+  const sup=CFG.suppliers[u.supplierId];
+  const c=u.commercial||{};
+  // Decode a commercial fingerprint (JSON of the spec the supplier is asked to honour) into a one-line summary.
+  const fpSummary=(fp)=>{try{const f=JSON.parse(fp);return `${f.startDate||'?'}→${f.endDate||'?'} · ×${f.qty||1} · ${(f.paxIds||[]).length} pax`;}catch(e){return '';}};
+  const tcell=(k,o)=>{
+    if(!o) return `<div class="tcell"><div class="tk">${k}</div><div class="tv">—</div><div class="ts">none</div></div>`;
+    const ver=o.ver?`<span class="tver">v${o.ver}</span>`:'';
+    const state=o.state?o.state:'agreed';
+    const at=o.at?` · @t${o.at}`:'';
+    const fp=o.fp?fpSummary(o.fp):'';
+    return `<div class="tcell"><div class="tk">${k}</div><div class="tv">$${o.price}${ver}</div><div class="ts">${state}${at}</div>${fp?`<div class="tfp">${esc(fp)}</div>`:''}</div>`;
+  };
+  const recban=u.supplierStatus
+    ? `<div class="recban rec-${u.supplierStatus}">⇄ Supplier status: ${u.supplierStatus}</div>`
+    : `<div class="recban" style="border-color:var(--line);color:var(--dim);background:#0f1620">⇄ Supplier status: not shown until vouchers are issued</div>`;
+  // Summary-first: status / sell (client) + discounted / net (supplier) + discounted / qty lead the Details block.
+  // Promotions apply to BOTH sides, so each money figure shows its gross and (when a promo applies) its discounted value.
+  const pr=u.price;
+  const netGross=pr?pr.netFigure:0, netDisc=pr?(pr.effectiveNet!=null?pr.effectiveNet:pr.netFigure):0, netD=pr?(pr.netDiscount||0):0;
+  const detail=`<div class="idetail">
+    <div class="kv"><span class="k">status</span><span><span class="badge ${stBadge(u.status)}">${u.status}</span>${u.isAuto?' <span class="badge b-dim">auto-confirm</span>':''}${u.locked?' <span class="badge b-bad">🔒 LOCKED</span>':''}${u.pendingOp?` <span class="op op-${u.pendingOp}">${u.pendingOp}</span>`:''}</span></div>
+    ${pr?`<div class="kv"><span class="k">net (supplier)</span><span>${u.hypothetical?'<span class="badge b-warn">hypothetical</span> ':''}$${netGross}</span></div>`:''}
+    ${pr&&netD?`<div class="kv"><span class="k">net (supplier) discounted</span><span style="color:var(--good)"><b>$${netDisc}</b> <span class="hint">−$${netD} promos</span></span></div>`:''}
+    <div class="kv"><span class="k">qty (commercial)</span><span>×${u.qty||1}</span></div>
+    <div class="kv"><span class="k">supplier</span><span>${sup?sup.name:u.supplierId}</span></div>
+    <div class="kv"><span class="k">dates</span><span>${u.startDate||'?'} → ${u.endDate||'?'}${u.parentId?(u.datesLocal?' <span class="hint">(own window)</span>':' <span class="hint">(follows service)</span>'):''}</span></div>
+    ${u.supplierPayment&&u.supplierPayment.dueDate?`<div class="kv"><span class="k">supplier pay due</span><span><b>⏰ ${u.supplierPayment.dueDate}</b> <span class="hint">· dep ${Math.round(u.supplierPayment.depositPct*100)}%</span></span></div>`:''}
+    <div class="kv"><span class="k">travellers (${(u.paxIds||[]).length})</span><span>${(u.paxIds||[]).map(id=>{const p=itn.pax.find(x=>x.id===id);return p?esc(p.name)+(p.fullName?' '+esc(p.fullName):''):esc(id);}).join(' · ')||'<span class="hint">none allocated</span>'}</span></div>
+    ${u.locked?'<div class="kv"><span class="k">lock</span><span style="color:var(--bad)">🔒 LOCKED — its supplier is locked (a payment was recorded). A Finance (FIN) user unlocks the supplier in the Suppliers panel.</span></div>':''}
+    ${u.paymentTerms?`<div class="kv"><span class="k">payment terms</span><span>${Math.round(u.paymentTerms.depositPct*100)}% deposit · balance ${u.paymentTerms.dueDays}d before travel</span></div>`:''}
+    ${u.opsReady?'<div class="kv"><span class="k">ops</span><span style="color:var(--good)">OPS_READY ✓</span></div>':''}
+    ${u.cancellation?`<div class="kv"><span class="k">cancellation</span><span>fee $${u.cancellation.fee} / refund $${u.cancellation.refund}</span></div>`:''}
+    ${c.supplierAside?`<div class="kv"><span class="k">⚠ supplier note</span><span style="color:var(--warn)">${c.supplierAside.state} · ${c.supplierAside.ctx}</span></div>`:''}
+    <div class="kv" style="border-top:1px solid var(--line);margin-top:4px;padding-top:6px"><span class="k"><b>sell (client)</b></span><span style="font-size:14px">${pr&&pr.overpriced?'<span class="badge b-warn">⚠ &gt; rack</span> ':''}${pr&&pr.underpriced?'<span class="badge b-bad">⚠ &lt; net</span> ':''}<b style="color:var(--good)">$${pr?pr.effectiveSell:(u.sellPrice||0)}</b></span></div>
+  </div>
+  ${priceBreakdownHTML(u)}`;
+  // status transitions (a.statusTx) render in the status picker by the status; hold-level toggles render in the holds
+  // list; everything else (edits, Remove, Revert amendment, Ops) stays here as the service/extra actions.
+  const itemActs=acts().filter(a=>a.category==='item' && a.group!=='hold' && !a.statusTx && !a.hidden);
+  // Left-pane section header helper + the tabbed sections. Every tab body stays in the DOM (only the active one is
+  // shown) so nothing is removed and all section renderers still run — the tabs just stop six blocks stacking at once.
+  const ah=(color,txt,extra)=>`<div class="ah" style="color:${color};margin:0 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● ${txt}${extra||''}</div>`;
+  const promoSet=u.promotions||{selected:[],catalog:[],toggleState:'default'};
+  const nPromo=(promoSet.selected||[]).length;
+  // item-modal Promotions tab dot colour by toggle state: warn=yellow · good=green · acc=blue · acc-dashed=blue(hollow) · default=grey
+  const PROMO_DOT={warn:'<span style="color:var(--warn)">●</span>',good:'<span style="color:var(--good)">●</span>',acc:'<span style="color:var(--acc)">●</span>','acc-dashed':'<span style="color:var(--acc)">◌</span>',default:'<span style="color:var(--dim)">●</span>'};
+  const nHolds=(u.holds||[]).length, nDocs=(u.documents||[]).length;
+  const voucherLine=c.voucher?`<div class="hint" style="margin:-2px 0 6px">🧾 on voucher <a href="#" onclick="closeItemModal();openVoucher('${c.voucher.id}');return false">${c.voucher.id}</a> · line <b>${c.voucher.state}</b> (${c.voucher.action||'—'})${c.voucher.holdId?' · hold '+esc(c.voucher.holdId)+' sent':''}</div>`:(c.confirmedVoucherId?`<div class="hint" style="margin:-2px 0 6px">🧾 booked on <a href="#" onclick="closeItemModal();openVoucher('${c.confirmedVoucherId}');return false">${c.confirmedVoucherId}</a></div>`:'');
+  const TABS=[
+    {k:'details', lbl:'Details', body: ah('var(--dim)','Details')+detail},
+    {k:'commercial', lbl:'Commercial', body: ah('var(--rec)','Commercial (supplier-side)')+recban+`<div class="triple">${tcell('target',c.target)}${tcell('requested',c.requested)}${tcell('confirmed',c.confirmed)}</div>`+voucherLine},
+    {k:'holds', lbl:'Holds'+(nHolds?` (${nHolds})`:''), body: ah('var(--acc)','Supplier holds',u.holdMismatch?' <span class="badge b-warn">mismatch</span>':'')+holdsHTML(u)},
+    {k:'promotions', lbl:(PROMO_DOT[promoSet.toggleState]||PROMO_DOT.default)+' Promotions'+(nPromo?` (${nPromo})`:''), body: ah('var(--good)','Promotions &amp; Discounts')+promotionsTabHTML(u)},
+    {k:'documents', lbl:'Docs'+(nDocs?` (${nDocs})`:''), body: ah('var(--acc)','Documents',' <span class="hint" style="font-weight:400">(attachments · not part of pending changes)</span>')+itemDocsHTML(u)},
+  ];
+  const activeTab=TABS.some(t=>t.k===itemTab)?itemTab:'details';
+  return `<div class="modal-bg" id="imodal" style="display:flex" onclick="if(event.target.id==='imodal')closeItemModal()">
+    <div class="modal modal-wide" onclick="event.stopPropagation()">
+      <div class="mhead"><div class="mt">${u.parentId?'↳':'🧩'} ${esc(u.name)} <span class="hint" style="font-weight:400">${u.parentId?'extra of '+u.parentId:u.type} · ${u.id}</span></div>
+        <button class="close" onclick="closeItemModal()">✕</button></div>
+      <div class="mbody msplit">
+        <div class="mcol mcol-left">
+          ${u.changes?`<div class="ah" style="color:var(--pend);margin:0 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● Pending change${u.changes.op?` <span class="op op-${u.changes.op}">${u.changes.op}</span>`:''}</div>
+          <div class="idetail" style="border-color:var(--pend);margin-bottom:12px">${changeRowsHTML(u.changes).map(r=>`<div class="diff" style="padding:2px 0">${r}</div>`).join('')||'<span class="hint">tracked change</span>'}</div>`:''}
+          <div class="mtabs">${TABS.map(t=>`<button class="${activeTab===t.k?'on':''}" onclick="setItemTab('${t.k}')">${t.lbl}</button>`).join('')}</div>
+          ${TABS.map(t=>`<div class="mtab" data-tab="${t.k}"${activeTab===t.k?'':' style="display:none"'}>${t.body}</div>`).join('')}
+        </div>
+        <div class="mcol mcol-right">
+          <div class="ah" style="color:var(--good);margin:0 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● Status</div>
+          ${statusPickerHTML()}
+          <div class="ah" style="color:var(--warn);margin:14px 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● Service / extra actions</div>
+          ${itemActs.map(a=>a.id==='removeItem'?actRow(a,u.pendingOp==='REMOVE'?'Restore (undo remove)':'Remove'):actRow(a)).join('')}
+        </div>
+      </div>
+    </div></div>`;
+}
+// Per-item attached documents (flight tickets, doc-folder links, …). A URL description renders as a link.
+function itemDocsHTML(u){
+  const ds=u.documents||[];
+  if(!ds.length) return `<div class="hint" style="padding:2px 0 6px">No attached documents. Use “Add Document” below.</div>`;
+  return ds.map(d=>`<div class="hrow"><span class="badge b-dim">📎 ${esc(d.title)}</span><span class="hint hgrow">${/^https?:\/\//.test(d.description||'')?`<a href="${esc(d.description)}" target="_blank">${esc(d.description)}</a>`:esc(d.description||'')}</span></div>`).join('');
+}
+function holdsHTML(u){
+  const tfp=(u.commercial&&u.commercial.target)?u.commercial.target.fp:null;
+  if(!u.holds || !u.holds.length) return `<div class="hint" style="padding:2px 0 6px">No supplier holds. Use “Add Hold” to record one.</div>`;
+  const NEXT={HELD:'released',RELEASED:'held'};
+  return u.holds.map(h=>{
+    const released=h.status==='RELEASED';
+    const covers=!h.disabled && !h.expired && !released && h.fp===tfp;
+    const badge=h.disabled?'b-dim':(h.expired?'b-bad':(released?'b-dim':(h.status==='HELD'?(covers?'b-good':'b-warn'):(covers?'b-st':'b-warn'))));
+    const cov=h.disabled?'disabled (line agreed)':(h.expired?'EXPIRED':(released?'released':(covers?'covers spec':'stale')));
+    const statusToggle=`<button class="hbtn-sm" ${(h.expired||h.disabled)?'disabled':''} onclick="event.stopPropagation();runAction('holdStatus',{holdId:'${h.id}'})">→ ${NEXT[h.status]||'held'}</button>`;
+    return `<div class="hrow" ${h.disabled?'style="opacity:.5"':''}>
+      <span class="badge ${badge}">${h.status||'HELD'} · ${cov}</span>
+      <b style="flex-shrink:0">$${h.price}</b>
+      <span class="hint hgrow">${h.id} · expires ${esc(h.expiresAt)}</span>
+      ${statusToggle}
+      <button class="hbtn-sm" ${h.disabled?'disabled':''} onclick="event.stopPropagation();runAction('expire',{holdId:'${h.id}'})">${h.expired?'un-expire':'mark expired'}</button>
+    </div>`;
+  }).join('');
+}
+/* ---------- promotions & discounts (shared renderers) ---------- */
+// JS mirrors of itny.js promoConditionText / promoActionText (for catalog promos where we only have the raw promo object).
+function promoRng(r){ return !r?'any':(r.min!=null&&r.max!=null?(r.min===r.max?String(r.min):r.min+'–'+r.max):r.min!=null?'≥'+r.min:r.max!=null?'≤'+r.max:'any'); }
+function promoCondText(c){
+  switch(c.conditionType){
+    case 'SupplierNights': return 'Nights at supplier '+promoRng(c.nights);
+    case 'NightsTotal': return 'Total nights '+promoRng(c.nightsTotal||c.nights);
+    case 'SuppliersTotal': return 'Accommodation lines '+promoRng(c.suppliersTotal||c.nights);
+    case 'PaxNumber': return (c.paxType||'Any')+' pax '+promoRng(c.paxCount);
+    case 'PaxAge': return (c.paxType||'Any')+' age '+promoRng(c.age);
+    default: return c.conditionType;
+  }
+}
+function promoBenefitText(a){
+  if(!a) return '';
+  if(a.actionType==='AddOn') return 'Add-on: '+(a.addOn||'complimentary');
+  const d=a.discount||{}; let scope='whole line';
+  if(d.targetType==='Nights'){ const n=(d.nightsIndexFrom!=null&&d.nightsIndexTo!=null)?Math.max(1,d.nightsIndexTo-d.nightsIndexFrom+1):1; scope=(d.targetNightsType||'Any')+' '+n+' night'+(n===1?'':'s'); }
+  else if(d.targetType==='Pax') scope=(d.paxType||'all')+' pax';
+  return (d.discountPercent||0)+'% off '+scope;
+}
+const promoMatchBadge=ev=>(ev&&ev.matched)?'<span class="badge b-good">✓ matches</span>':'<span class="badge b-warn">✗ no match</span>';
+// PROJECTED match for a catalog template: do we have items that satisfy all conditions (could match if selected)?
+const promoProjectedBadge=ev=>(ev&&ev.matched)?'<span class="badge b-good" title="the itinerary has items that satisfy all conditions — select &amp; associate them to apply">✓ can match</span>':'<span class="badge b-warn" title="no items currently satisfy all conditions">✗ no match</span>';
+const promoKindBadge=promo=>promo.isManual?'<span class="badge b-st">manual</span>':(promo.templateId?'<span class="badge b-dim">system</span>':'<span class="badge b-dim">template</span>');
+const supName=sid=>(CFG.suppliers[sid]&&CFG.suppliers[sid].name)||sid;
+// Expandable conditions/benefits disclosure shared by every promo card (per-condition ✓/✗ when an eval is given).
+function promoCondBenefitDetails(promo, ev){
+  const conds=(ev&&ev.conditions&&ev.conditions.length)
+    ? ev.conditions.map(c=>`<li>${c.ok?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--warn)">✗</span>'} ${esc(c.description)}</li>`).join('')
+    : ((promo.conditions||[]).length?promo.conditions.map(c=>`<li>${esc(promoCondText(c))}</li>`).join(''):'<li class="hint">no conditions — always applies</li>');
+  const bens=(promo.actions||[]).map(a=>`<li>${esc(promoBenefitText(a))}</li>`).join('')||'<li class="hint">no benefit</li>';
+  return `<details class="promo-exp" onclick="event.stopPropagation()"><summary>▸ conditions (${(promo.conditions||[]).length}) · benefits (${(promo.actions||[]).length})</summary>
+    <div class="promo-cols"><div><div class="promo-sub">Conditions</div><ul>${conds}</ul></div><div><div class="promo-sub">Benefits</div><ul>${bens}</ul></div></div>
+    ${promo.isPartiallySupported&&promo.note?`<div class="hint" style="margin-top:4px">⚠ ${esc(promo.note)}</div>`:''}</details>`;
+}
+// CATALOG template card ("all" list). With an item context (opts.itemId) a "+ select" button creates an instance for that line.
+function promoTemplateCard(row, opts){
+  opts=opts||{}; const promo=row.promo, ev=row.eval;
+  const sup=opts.supplierLabel?`<span class="hint">${esc(supName(promo.supplierId))}</span>`:'';
+  const sel=opts.itemId?(row.alreadySelected?`<span class="hint">✓ selected for this line</span>`:`<button class="hbtn-sm" onclick="event.stopPropagation();runAction('selectPromotion',{templateId:'${promo.id}'})">+ select</button>`):'';
+  return `<div class="promo-card" onclick="openPromo('${promo.id}')">
+    <div class="promo-head"><span class="promo-nm">${esc(promo.name)}</span> ${ev?promoProjectedBadge(ev)+' ':''}<span class="badge b-dim">template</span> ${promo.isPartiallySupported?'<span class="badge b-warn">⚠ partial</span>':''} ${sup}<span class="hgrow"></span>${sel}</div>
+    ${promoCondBenefitDetails(promo, ev)}</div>`;
+}
+// SELECTED instance card. Shows match/kind/partial, its member services (each removable), candidate services to ADD
+// (so a circuit can be made to match), and a remove for a manual instance. Clicking the card opens the promo modal.
+function promoInstanceCard(row, opts){
+  opts=opts||{}; const inst=row.promo, ev=row.eval||{matched:false}, members=row.members||[], cands=row.candidates||[], multi=!!row.multi;
+  const cls='promo-card sel'+(!ev.matched?' nomatch':'');
+  const sup=opts.supplierLabel?`<span class="hint">${esc(supName(inst.supplierId))}</span>`:'';
+  // opts.addLineId: card shown on a line NOT yet a member of a MULTI-service (circuit) instance → one-click "add this line".
+  const addLineBtn=opts.addLineId?`<button class="hbtn-sm" onclick="event.stopPropagation();runAction('togglePromoItem',{promoId:'${inst.id}',itemId:'${opts.addLineId}'})">+ add this line</button>`:'';
+  // head-right control: manual → remove; single-service with a line context → deselect (multi manages via its services list).
+  const ctrl=inst.isManual?`<button class="hbtn-sm" onclick="event.stopPropagation();runAction('addDiscount',{removePromoId:'${inst.id}'})">✕ remove</button>`
+    :(!multi && opts.lineId)?`<button class="hbtn-sm" onclick="event.stopPropagation();runAction('togglePromoItem',{promoId:'${inst.id}',itemId:'${opts.lineId}'})">✕ deselect</button>`:'';
+  // body: a MULTI-service instance manages its member services (✕ each) + offers candidate services to ADD; a SINGLE-service
+  // / manual instance is item-specific, so just note which line(s) it's on (no add — select your own on another item).
+  let body;
+  if(multi){
+    const memberList=members.length?members.map(m=>`<span class="promo-mem">${esc(m.name)}<button class="promo-x" title="remove this service" onclick="event.stopPropagation();runAction('togglePromoItem',{promoId:'${inst.id}',itemId:'${m.id}'})">✕</button></span>`).join(''):'<span class="hint">no services</span>';
+    const addBtns=cands.length?`<div class="promo-add"><span class="hint">add service:</span> ${cands.map(c=>`<button class="hbtn-sm" onclick="event.stopPropagation();runAction('togglePromoItem',{promoId:'${inst.id}',itemId:'${c.id}'})">+ ${esc(c.name)}</button>`).join(' ')}</div>`:'';
+    body=`<div class="promo-mems">services: ${memberList}</div>${addBtns}`;
+  } else {
+    body=members.length?`<div class="promo-mems">for: ${members.map(m=>esc(m.name)).join(', ')}</div>`:'';
+  }
+  return `<div class="${cls}" onclick="openPromo('${inst.id}')">
+    <div class="promo-head"><span class="promo-nm">${esc(inst.name)}</span> ${promoMatchBadge(ev)} ${promoKindBadge(inst)} ${inst.isPartiallySupported?'<span class="badge b-warn">⚠ partial</span>':''} ${sup}<span class="hgrow"></span>${addLineBtn}${ctrl}</div>
+    ${body}${promoCondBenefitDetails(inst, ev)}</div>`;
+}
+// Item-modal Promotions tab: state hint · SELECTED (this line is a member) · OTHER SELECTED of this supplier (add this
+// line to an existing instance — e.g. an existing circuit) · separator · ALL catalog templates (select → new instance).
+function promotionsTabHTML(u){
+  const P=u.promotions||{selected:[],supplierOther:[],catalog:[],toggleState:'default'};
+  const HINT={default:'No supplier promotions for this line.',acc:'Matching promotions available — select to apply.','acc-dashed':'Promotions available; select & add services to match.',good:'Selected promotions applied to the client price.',warn:'⚠ A selected promotion no longer matches — add a service or review before Apply.'};
+  let h=`<div class="hint" style="margin:0 0 6px">${HINT[P.toggleState]||''}</div>`;
+  if((P.selected||[]).length){ h+='<div class="promo-grp">Selected (this line)</div>'+P.selected.map(r=>promoInstanceCard(r,{lineId:u.id})).join(''); }
+  if((P.supplierOther||[]).length){ h+='<div class="promo-grp">Other circuit promotions (this supplier) — add this line</div>'+P.supplierOther.map(r=>promoInstanceCard(r,{addLineId:u.id})).join(''); }
+  if(u.type==='ACCOMMODATION' && (P.catalog||[]).length){ h+='<div class="promo-sep"></div><div class="promo-grp">All (catalog)</div>'+P.catalog.map(r=>promoTemplateCard(r,{itemId:u.id})).join(''); }
+  if(u.type!=='ACCOMMODATION') h+='<div class="hint">Promotions apply to accommodation lines only.</div>';
+  else if(!(P.selected||[]).length && !(P.supplierOther||[]).length && !(P.catalog||[]).length) h+='<div class="hint">No promotions for this supplier.</div>';
+  h+=`<div style="margin-top:8px"><button class="hbtn-sm" onclick="event.stopPropagation();openAddDiscount()">+ Add Discount (manual)</button></div>`;
+  return h;
+}
+// Top-level Promotions & Discounts panel: SELECTED instances (dups allowed, members + add-service) then a separator then ALL templates.
+function promotionsPanelHTML(p){
+  const P=p.promotions||{selected:[],catalog:[]}, sel=P.selected||[], cat=P.catalog||[];
+  if(!sel.length && !cat.length) return '<div class="hint">No promotions configured.</div>';
+  let h='<div class="promo-grp">Selected ('+sel.length+')</div>'+(sel.length?sel.map(r=>promoInstanceCard(r,{supplierLabel:true})).join(''):'<div class="hint">None selected yet — open an accommodation line and pick from the catalog below.</div>');
+  h+='<div class="promo-sep"></div><div class="promo-grp">All (catalog)</div>'+(cat.length?cat.map(r=>promoTemplateCard(r,{supplierLabel:true})).join(''):'<div class="hint">No templates.</div>');
+  return h;
+}
+// Open the schema-driven Add-Discount form for the open item (manual promotion: descr + amount).
+function openAddDiscount(){ const a=actById('addDiscount'); if(a) openForm(a,{}); }
+function openPromo(id){ modalPromoId=id; render(); }
+function closePromo(){ modalPromoId=null; render(); }
+// Find a promo read-model row by id across the projection panel (selected/catalog) + every item's promotions read-model.
+function findPromoView(p,id){
+  const P=p.promotions||{selected:[],catalog:[]};
+  let row=(P.selected||[]).find(r=>r.promo.id===id)||(P.catalog||[]).find(r=>r.promo.id===id);
+  if(row) return row;
+  for(const s of p.items){ const sp=s.promotions; if(sp){ row=(sp.selected||[]).find(r=>r.promo.id===id)||(sp.catalog||[]).find(r=>r.promo.id===id); if(row) return row; } }
+  return null;
+}
+function promoModalHTML(p){
+  if(!modalPromoId) return '';
+  const row=findPromoView(p,modalPromoId); if(!row) return '';
+  const promo=row.promo, ev=row.eval, members=row.members||[];
+  const sup=supName(promo.supplierId);
+  const conds=(ev&&ev.conditions&&ev.conditions.length)
+    ? ev.conditions.map(c=>`<div class="hrow"><span class="badge ${c.ok?'b-good':'b-warn'}">${c.ok?'✓':'✗'}</span><span class="hgrow">${esc(c.description)}</span></div>`).join('')
+    : ((promo.conditions||[]).length?promo.conditions.map(c=>`<div class="hrow"><span class="hgrow">${esc(promoCondText(c))}</span></div>`).join(''):'<div class="hint">No conditions — always applies.</div>');
+  const bens=(promo.actions||[]).map(a=>`<div class="hrow"><span class="badge ${a.actionType==='AddOn'?'b-rec':'b-good'}">${a.actionType==='AddOn'?'add-on':'discount'}</span><span class="hgrow">${esc(promoBenefitText(a))}</span></div>`).join('')||'<div class="hint">No benefit.</div>';
+  const win=promo.bookingWindow?`${promo.bookingWindow.from||'—'} → ${promo.bookingWindow.to||'—'}`:'open';
+  const tv=(promo.travelDates&&promo.travelDates.length)?promo.travelDates.map(w=>`${w.from||'—'}→${w.to||'—'}`).join(', '):'any';
+  const isTemplate=!!row.template;
+  const matchBadge=ev?(isTemplate?promoProjectedBadge(ev):promoMatchBadge(ev)):'';
+  return `<div class="modal-bg" id="pmodal" style="display:flex" onclick="if(event.target.id==='pmodal')closePromo()">
+    <div class="modal modal-wide" onclick="event.stopPropagation()">
+      <div class="mhead"><div class="mt">🏷 ${esc(promo.name)} <span class="hint" style="font-weight:400">${promo.id} · ${esc(sup)} · ${isTemplate?'catalog template (projected)':'selected instance'}</span></div>
+        <button class="close" onclick="closePromo()">✕</button></div>
+      <div class="mbody">
+        <div style="margin-bottom:9px">${matchBadge?matchBadge+' ':''}${promoKindBadge(promo)} ${promo.isPartiallySupported?`<span class="badge b-warn">⚠ partially supported</span>`:''}${promo.headOffice?` <span class="hint">${esc(promo.headOffice)}</span>`:''}</div>
+        ${promo.isPartiallySupported&&promo.note?`<div class="recban rec-AwaitingSupplier" style="margin:0 0 9px">⚠ ${esc(promo.note)}</div>`:''}
+        ${members.length?`<div class="hrow"><span class="hgrow">Services</span><b>${members.map(m=>esc(m.name)).join(', ')}</b></div>`:''}
+        <div class="hrow"><span class="hgrow">Booking window</span><b>${esc(win)}</b></div>
+        <div class="hrow"><span class="hgrow">Travel dates</span><b>${esc(tv)}</b></div>
+        <div class="ah" style="color:var(--rec);margin:12px 0 6px">● Conditions</div>${conds}
+        <div class="ah" style="color:var(--good);margin:12px 0 6px">● Benefits</div>${bens}
+      </div>
+    </div></div>`;
+}
+function findView(p,id){ for(const s of p.items){ if(s.id===id) return s; for(const e of (s.extras||[])) if(e.id===id) return e; } return null; }
+
+/* ---------- suppliers & vouchers ---------- */
+const vstBadge = st => ({CONFIRMED:'b-good',REJECTED:'b-bad',SENT:'b-st',SUPERSEDED:'b-dim',DRAFT:'b-dim'}[st]||'b-st');
+const lineBadge = st => ({CONFIRMED:'b-good',CANCELLED:'b-bad',REJECTED:'b-bad',AWAITING:'b-st'}[st]||'b-st');
+function suppliersHTML(p){
+  const sup=p.suppliers||[];
+  if(!sup.length) return `<div class="hint">No vouchers issued yet — send vouchers, or apply a change that needs them.</div>`;
+  const body=sup.map(s=>{
+    const terms=s.terms;
+    const tline=(terms&&terms.entries.length)?`<div class="hint" style="margin:3px 0 6px">⏱ earliest due <b>${terms.minDueToken}</b> · outstanding <b class="num">$${terms.totalOutstanding}</b> · deposit <b class="num">$${terms.depositTotal}</b></div>`:'';
+    // supplier payment roll-up — total owed / total paid / due / due date, plus the recorded payments and an Add-payment button.
+    const pay=s.payment||{};
+    const payLine=`<div class="hint" style="margin:3px 0 6px">💰 total <b class="num">$${pay.total||0}</b> · paid <b class="num">$${pay.paid||0}</b> · due <b class="num">$${pay.due||0}</b>${pay.dueDate?` · due date <b>${pay.dueDate}</b>`:''}</div>`;
+    const payRows=(pay.payments||[]).map(pp=>`<div class="hint" style="margin:0 0 2px 8px">↳ paid <b class="num">$${pp.amount}</b>${pp.comment?' · '+esc(pp.comment):''} <span class="hint">@t${pp.at}</span></div>`).join('');
+    const payBtn=s.hasConfirmedVoucher?`<button class="hbtn-sm" onclick="event.stopPropagation();supplierPay('${s.id}')">+ Add payment</button>`:'';
+    const lockTag=s.locked?' <span class="badge b-warn">🔒 locked</span>':'';
+    // Lock/Unlock toggle — 🔒 Lock when unlocked (needs a confirmed voucher), 🔓 Unlock when locked (FIN-only).
+    // Each is disabled (with the gate reason on hover) when its action isn't allowed for the current user/state.
+    let lockToggle='';
+    if(s.locked){
+      const a=actById('unlockSupplier'); const v=a?a.isAllowed({supplierId:s.id}):null;
+      lockToggle=`<button class="hbtn-sm" ${v&&v.ok?'':'disabled'} title="${v?esc(v.why):''}" onclick="event.stopPropagation();supplierUnlock('${s.id}')">🔓 Unlock</button>`;
+    } else if(s.hasConfirmedVoucher){
+      const a=actById('lockSupplier'); const v=a?a.isAllowed({supplierId:s.id}):null;
+      lockToggle=`<button class="hbtn-sm" ${v&&v.ok?'':'disabled'} title="${v?esc(v.why):''}" onclick="event.stopPropagation();supplierLock('${s.id}')">🔒 Lock</button>`;
+    }
+    const vrows=s.vouchers.map(v=>{
+      const full=p.vouchers.find(x=>x.id===v.id);
+      const supLink = (v.status==='SUPERSEDED' && full && full.supersededBy) ? `<a href="#" onclick="event.stopPropagation();openVoucher('${full.supersededBy}');return false">→ ${full.supersededBy}</a>` : '';
+      // Confirm/Reject are re-answerable at any status (the aggregate enforces the cancellation-notice rule); prior-race answers stay available too.
+      const acts=`<button class="hbtn-sm" onclick="event.stopPropagation();voucherAction('voucherConfirm','${v.id}')">confirm</button><button class="hbtn-sm" onclick="event.stopPropagation();voucherAction('voucherReject','${v.id}')">reject</button>${supLink}`;
+      return `<div class="hrow" onclick="openVoucher('${v.id}')" style="cursor:pointer">
+        <span class="badge ${vstBadge(v.status)}">${v.status}</span>
+        <span class="hint hgrow">${v.id} · v${v.ver} · ${full?full.lines.length:0} line(s)${full&&full.bookingId?' · '+esc(full.bookingId):''}</span>${acts}</div>`;
+    }).join('');
+    return `<div style="margin-bottom:11px"><div class="lirow" style="margin-bottom:4px"><b>${esc(s.name)}</b> <span class="hint">${s.id}${s.booking?' · booking '+esc(s.booking):''} · ${s.voucherCount} voucher(s)</span>${lockTag}<span class="sp" style="flex:1"></span>${lockToggle}${payBtn}</div>${tline}${payLine}${payRows}${vrows}</div>`;
+  }).join('');
+  return body;
+}
+// Add Supplier Payment — supplier-level action; gate on the supplier id then open the amount/comment form.
+function supplierPay(supplierId){
+  itn.select(null);
+  const a=actById('addSupplierPayment'); if(!a || !a.isAllowed({supplierId}).ok) return;
+  openForm(a,{supplierId});
+}
+// Lock supplier — gate then run directly (only a supplierId param, no form needed).
+function supplierLock(supplierId){
+  itn.select(null);
+  const a=actById('lockSupplier'); if(!a || !a.isAllowed({supplierId}).ok) return;
+  a.execute({supplierId}).then(render);
+}
+// Unlock supplier — FIN-only; gate then run directly (only a supplierId param, no form needed).
+function supplierUnlock(supplierId){
+  itn.select(null);
+  const a=actById('unlockSupplier'); if(!a || !a.isAllowed({supplierId}).ok) return;
+  a.execute({supplierId}).then(render);
+}
+function openVoucher(id){ modalVoucherId=id; render(); }
+function closeVoucher(){ modalVoucherId=null; render(); }
+
+/* ---------- documents (quotes, invoices & FCAs) ---------- */
+const DOC_KINDS = {   // one entry per document family — drives the list, modal and Mark-As-Sent action
+  Quote:   { coll:'quotes',   markFn:'quoteMarkSent',   icon:'📄', money:false },
+  Invoice: { coll:'invoices', markFn:'invoiceMarkSent', icon:'💵', money:true  },
+  FCA:     { coll:'fcas',     markFn:'fcaMarkSent',     icon:'📋', money:false },
+};
+function docRow(d, kind){
+  const flag = d.matchesCurrent ? '<span class="badge b-good">✓ current</span>' : '<span class="badge b-warn">✗ stale</span>';
+  const sent = d.sent ? '<span class="badge b-st">✉ sent</span>' : '<span class="badge b-dim">not sent</span>';
+  const markFn = DOC_KINDS[kind].markFn;
+  return `<div class="hrow"><span class="hgrow">${d.id} <span class="hint">@D${d.at} · $${d.total}</span></span>${sent}${flag} <button class="hbtn-sm" ${d.sent?'disabled':''} onclick="docAction('${markFn}','${d.id}')">Mark As Sent</button> <button class="hbtn-sm" onclick="openDoc('${kind}','${d.id}')">view</button></div>`;
+}
+function docsHTML(p){
+  const q=(p.quotes||[]).slice().reverse(), iv=(p.invoices||[]).slice().reverse(), fc=(p.fcas||[]).slice().reverse();
+  // Generate-document actions (was in the itinerary-actions list) — they produce the snapshots listed below.
+  const gen=acts().filter(a=>a.group==='documents' && !a.hidden);
+  const genHTML = gen.length ? `<div class="actgrp grp-documents"><div class="ah">● Generate</div>${gen.map(actRow).join('')}</div>` : '';
+  const ql = q.length ? q.map(d=>docRow(d,'Quote')).join('') : '<div class="hint">No quotes generated yet — Generate quote.</div>';
+  const il = iv.length ? iv.map(d=>docRow(d,'Invoice')).join('') : '<div class="hint">No invoices generated yet — Generate invoice.</div>';
+  const fl = fc.length ? fc.map(d=>docRow(d,'FCA')).join('') : '<div class="hint">No FCAs generated yet — Generate FCA (CONFIRMED, all lines OPS_READY).</div>';
+  return `${genHTML}<div class="ah" style="color:var(--acc)">● Quotes (${q.length})</div>${ql}<div class="ah" style="color:var(--acc);margin-top:9px">● Invoices (${iv.length})</div>${il}<div class="ah" style="color:var(--acc);margin-top:9px">● FCAs (${fc.length})</div>${fl}`;
+}
+function openDoc(kind, id){ modalDocId={kind:DOC_KINDS[kind].coll,id}; render(); }
+function closeDoc(){ modalDocId=null; render(); }
+async function docAction(actId, id){ const a=actById(actId); if(!a) return; await a.execute({id}); render(); }
+// Map a snapshot line's paxIds back to the snapshot travellers (carry tag/fullName/age/comment), and the A/C/I count.
+function docPax(d,l){ return (l.paxIds||[]).map(id=>(d.pax||[]).find(px=>px.id===id)).filter(Boolean); }
+function docAci(d,l){ const c={A:0,C:0,I:0}; docPax(d,l).forEach(px=>{ if(px.type==='ADULT')c.A++; else if(px.type==='CHILD')c.C++; else if(px.type==='INFANT')c.I++; }); return c.A+'/'+c.C+'/'+c.I; }
+// Quote/Invoice line-item table — yyyy-mm-dd · type · (supplier/name/discounts) · A/C/I · duration · qty · price · discount · total.
+function docQiTable(d,isInv){
+  const rows=d.lines.map(l=>{
+    const disc=(l.promos&&l.promos.length)?`<ul class="c2-disc">${l.promos.map(x=>`<li>${esc(x.name)}${x.isManual?' <span class="hint">(manual)</span>':''} ${x.amount?('−$'+x.amount):(x.benefits&&x.benefits.length?esc(x.benefits[0]):'')}${x.matched?'':' <span style="color:var(--warn)">(no match)</span>'}</li>`).join('')}</ul>`:'';
+    // A QUOTE shows the amendment as a diff (TO_ADD · TO_CHANGE old→new · TO_CANCEL fee · CANCELLED). An INVOICE shows the
+    // COMMITTED projection: a staged add/change folds in silently (no badge, new values only); a staged cancel reads CANCELLED.
+    let cs=l.changeStatus;
+    if(isInv){ if(cs==='TO_ADD'||cs==='TO_CHANGE') cs=null; else if(cs==='TO_CANCEL') cs='CANCELLED'; }
+    const isCancel=cs==='TO_CANCEL'||cs==='CANCELLED';
+    const badgeCls={CANCELLED:'b-bad',TO_CANCEL:'b-warn',TO_ADD:'b-good',TO_CHANGE:'b-st'}[cs]||'b-dim';
+    const badge=cs?`<span class="badge ${badgeCls}">${cs}</span> `:'';
+    // Quote TO_CHANGE → old → new for the changed commercial figures (only the columns that actually moved).
+    const diff=cs==='TO_CHANGE'&&l.prior;
+    const oldNew=(o,n)=>(diff&&o!=null&&o!==n)?`<span class="hint" style="text-decoration:line-through">$${o}</span> → $${n}`:`$${n}`;
+    const priceCell=isCancel?`<span style="text-decoration:line-through;opacity:.55">$${l.price}</span>`:oldNew(l.prior&&l.prior.price,l.price);
+    const totalCell=isCancel?`$${l.cancelFee||0} <span class="hint">fee</span>`:oldNew(l.prior&&l.prior.total,l.total);
+    return `<tr${isCancel?' style="opacity:.85"':''}>
+      <td>${l.startDate||'?'}</td><td>${l.type}</td>
+      <td><div class="c2-sup">${esc(l.supplierName||l.supplierId)}</div><div class="c2-nm">${badge}${l.parentId?'↳ ':''}${esc(l.name)}</div>${disc}</td>
+      <td>${docAci(d,l)}</td><td class="num">${l.duration||''}</td><td class="num">${l.qty||1}</td>
+      <td class="num">${priceCell}</td><td class="num">${isCancel?'—':(l.discountAmt?'−$'+l.discountAmt:'—')}</td><td class="num">${totalCell}</td></tr>`;
+  }).join('');
+  return `<table class="doctbl"><thead><tr><th>Date</th><th>Type</th><th>Supplier / Service / Promotions</th><th>A/C/I</th><th>Dur</th><th>Qty</th><th>Price</th><th>Promo</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+// FCA line-item table — date · type · (supplier/name+A/C/I+duration+qty/paxes{name(age),comment}) · status · 3 ops checkboxes.
+function docFcaTable(d){
+  const chk=on=>`<input type="checkbox" ${on?'checked':''}>`;
+  const rows=d.lines.map(l=>{
+    const pax=docPax(d,l).map(px=>`<li>${esc(px.fullName||px.name)}${px.age!=null?' ('+px.age+')':''}${px.comment?` — <span class="pxcmt">${esc(px.comment)}</span>`:''}</li>`).join('');
+    return `<tr>
+      <td>${l.startDate||'?'}</td><td>${l.type}</td>
+      <td><div class="c2-sup">${esc(l.supplierName||l.supplierId)}</div><div class="c2-nm">${l.parentId?'↳ ':''}${esc(l.name)} <span class="c2-sup">${docAci(d,l)} · ${l.duration||0}d · ×${l.qty||1}</span></div><ul class="c2-pax">${pax||'<li class="c2-sup">none allocated</li>'}</ul></td>
+      <td><span class="badge ${stBadge(l.status)}">${l.status}</span></td>
+      <td style="text-align:center">${chk(l.opsReady)}</td><td style="text-align:center">${chk(l.documents&&l.documents.length>0)}</td><td style="text-align:center">${chk(l.supplierStatus==='Booked')}</td></tr>`;
+  }).join('');
+  return `<table class="doctbl"><thead><tr><th>Date</th><th>Type</th><th>Supplier / Service / Paxes</th><th>Status</th><th title="OPS_READY">Ops</th><th title="documents attached">Docs</th><th title="supplier line Booked">Booked</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function docModalHTML(p){
+  if(!modalDocId) return '';
+  const d=(p[modalDocId.kind]||[]).find(x=>x.id===modalDocId.id); if(!d) return '';
+  const K = Object.entries(DOC_KINDS).find(([,v])=>v.coll===modalDocId.kind) || ['Quote',DOC_KINDS.Quote];
+  const label = K[0], cfg = K[1], icon = cfg.icon, isInv = cfg.money, isFca = label==='FCA';
+  const flag = d.matchesCurrent
+    ? '<span class="badge b-good">✓ matches the current itinerary</span>'
+    : '<span class="badge b-warn">✗ stale — the itinerary changed since this was issued</span>';
+  // FCA → the operational line-item table (paxes + ops checkboxes); Quote/Invoice → the commercial line-item table.
+  const body = isFca
+    ? `<div class="ah" style="color:var(--warn);margin:0 0 7px">● Lines (snapshot at issue)</div>${docFcaTable(d)}`
+    : `<div class="ah" style="color:var(--warn);margin:0 0 7px">● Lines (snapshot at issue)${isInv?' <span class="hint" style="font-weight:400">— committed view (pending changes folded in)</span>':''}</div>${docQiTable(d,isInv)}
+        <div class="ah" style="color:var(--rec);margin:12px 0 7px">● Totals at issue</div>
+        <div class="hrow"><span class="hgrow"><b>Total</b> <span class="hint">(active lines)</span></span><b class="num">$${d.total}</b></div>
+        ${(()=>{const cf=(d.lines||[]).reduce((a,l)=>a+(l.cancelFee||0),0);return cf?`<div class="hrow"><span class="hgrow">Cancellation fees retained</span><b class="num">$${cf}</b></div>`:'';})()}
+        ${(()=>{if(isInv)return '';const tags=[...new Set((d.lines||[]).map(l=>l.changeStatus).filter(s=>s&&s!=='CANCELLED'))];return tags.length?`<div class="hint" style="margin-top:4px">⚠ Amendment pending — lines flagged ${tags.join(', ')} reflect an open change not yet applied (this quote shows the change as a diff; the invoice will show the committed result).</div>`:'';})()}
+        <div class="hrow"><span class="hgrow">Deposit</span><b class="num">${d.depositDetail&&d.depositDetail.skip?'skipped':'$'+d.deposit}</b>${d.depositDetail&&d.depositDetail.due!=null?` <span class="hint">due ${d.depositDetail.dueLabel}</span>`:''}</div>
+        ${isInv?`<div class="hrow"><span class="hgrow">Paid (at issue)</span><b class="num">$${d.paid}</b></div><div class="hrow"><span class="hgrow">Due (at issue)</span><b class="num">$${d.due}</b></div>
+        ${(d.milestones&&d.milestones.length)?`<div class="ah" style="color:var(--acc);margin:12px 0 7px">● Milestones (snapshot at issue)</div>${d.milestones.map(m=>`<div class="hrow"><span class="badge b-dim">${m.kind.toLowerCase()}</span><span class="hgrow">due ${m.dueLabel}${m.paid?' · <span class="hint">paid</span>':''}</span><b class="num">${m.type==='REFUND_TO_CLIENT'?'− ':''}$${m.amt}</b></div>`).join('')}`:''}`:''}`;
+  return `<div class="modal-bg" id="dmodal" style="display:flex" onclick="if(event.target.id==='dmodal')closeDoc()">
+    <div class="modal modal-wide" onclick="event.stopPropagation()">
+      <div class="mhead"><div class="mt">${icon} ${label} ${d.id} <span class="hint" style="font-weight:400">issued @D${d.at} · itinerary ${d.status} · ${d.paymentStatus}</span></div>
+        <button class="close" onclick="closeDoc()">✕</button></div>
+      <div class="mbody">
+        <div style="margin-bottom:9px">${flag} ${d.sent?'<span class="badge b-st">✉ sent to client</span>':'<span class="badge b-dim">not sent</span>'}</div>
+        ${body}
+        <div class="dlg-btns" style="margin-top:14px"><button class="primary" ${d.sent?'disabled':''} onclick="docAction('${cfg.markFn}','${d.id}')">${d.sent?'✉ Sent':'Mark As Sent'}</button></div>
+      </div>
+    </div></div>`;
+}
+function voucherModalHTML(p){
+  if(!modalVoucherId) return '';
+  const v=(p.vouchers||[]).find(x=>x.id===modalVoucherId); if(!v) return '';
+  const sup=CFG.suppliers[v.supplierId];
+  const lines=v.lines.map(l=>`<div class="hrow">
+      <span class="badge ${lineBadge(l.state)}">${l.state}</span>
+      <span class="op op-${l.action==='CANCEL'?'CANCEL':'ADD'}">${l.action}</span>
+      <span class="hgrow">${l.parentId?'↳ ':''}${esc(l.name)} <span class="hint">${l.itemId}${l.holdId?' · hold '+esc(l.holdId):''}</span>${(l.promos&&l.promos.length)?'<br><span class="hint">promos: '+l.promos.map(d=>esc(d.name)+(d.amount?(' −$'+d.amount):'')).join(' · ')+'</span>':''}</span>
+      <b class="num">$${l.price}</b> <span class="hint">net</span></div>`).join('');
+  const terms=v.terms;
+  const timeline=(terms&&terms.entries.length)
+    ? terms.entries.map(e=>`<div class="hrow"><span class="badge b-dim">due ${e.dueToken}</span><span class="hgrow">${esc(e.name)}${e.inherited?' <span class="hint">(inherited)</span>':''} · ${Math.round(e.depositPct*100)}% / ${e.dueDays}d before ${e.startDate}</span><b class="num">$${e.outstanding}</b> <span class="hint">dep $${e.deposit}</span></div>`).join('')
+      +`<div class="hint" style="margin-top:5px">earliest due <b>${terms.minDueToken}</b> · total outstanding <b class="num">$${terms.totalOutstanding}</b> · deposit <b class="num">$${terms.depositTotal}</b></div>`
+    : '<div class="hint">No payment terms yet — confirm the voucher to copy supplier terms.</div>';
+  const superLink = v.supersededBy
+    ? `<div class="recban rec-NeedsDecision" style="margin:0 0 8px">⊘ Superseded by <a href="#" onclick="openVoucher('${v.supersededBy}');return false">${v.supersededBy}</a> — actions disabled; act on the latest.</div>`
+    : (v.supersedes?`<div class="hint" style="margin-bottom:6px">supersedes <a href="#" onclick="openVoucher('${v.supersedes}');return false">${v.supersedes}</a></div>`:'');
+  const cmt = v.comment?`<div class="recban rec-NeedsDecision" style="margin:0 0 8px">✗ Reject comment: ${esc(v.comment)}</div>`:'';
+  // Confirm/Reject are re-answerable at any status (the aggregate enforces the cancellation-notice rule); prior-race answers stack on a superseded race.
+  const actbtns = `<button class="primary" onclick="voucherAction('voucherConfirm','${v.id}')">Confirm voucher</button> <button class="hbtn" onclick="voucherAction('voucherReject','${v.id}')">Reject voucher</button>`
+    + (v.isPriorRace?` <button class="hbtn" onclick="voucherAction('voucherConfirmPrior','${v.id}')">Prior confirm (race)</button> <button class="hbtn" onclick="voucherAction('voucherRejectPrior','${v.id}')">Prior reject (race)</button>`:'');
+  return `<div class="modal-bg" id="vmodal" style="display:flex" onclick="if(event.target.id==='vmodal')closeVoucher()">
+    <div class="modal modal-wide" onclick="event.stopPropagation()">
+      <div class="mhead"><div class="mt">🧾 Voucher ${v.id} <span class="hint" style="font-weight:400">${sup?esc(sup.name):v.supplierId} · v${v.ver} · <span class="badge ${vstBadge(v.status)}">${v.status}</span>${v.bookingId?' · booking '+esc(v.bookingId):''}</span></div>
+        <button class="close" onclick="closeVoucher()">✕</button></div>
+      <div class="mbody">
+        ${superLink}${cmt}
+        <div class="ah" style="color:var(--warn);margin:0 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● Lines (all-or-nothing)</div>
+        ${lines}
+        <div class="ah" style="color:var(--rec);margin:12px 0 7px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">● Payment terms timeline</div>
+        ${timeline}
+        <div class="dlg-btns" style="margin-top:14px">${actbtns}</div>
+      </div>
+    </div></div>`;
+}
+
+/* ---------- hoverbar ---------- */
+// Render the full per-action checklist from a verdict's .checks[] (each {ok, why, gated?, label?}).
+// Every gate + rule check is shown — ✓ ok / ✓* gated (right step, runtime-satisfiable) / ✕ blocking —
+// so you see WHY the aggregate is what it is (total ✗ when any single check fails). Hidden when there's
+// nothing extra to add over the headline (a lone check).
+function checksHTML(v,all){
+  if(!v||!v.checks||v.checks.length<(all?1:2)) return '';
+  const row=c=>{
+    const cls=c.ok?'ok':(c.gated?'cond':'no'), mk=c.ok?'✓':(c.gated?'✓*':'✕');
+    const lbl=c.label?`<b>${esc(c.label)}</b> — `:'';
+    return `<li class="${cls}"><span class="ck-mk">${mk}</span><span>${lbl}${esc(c.why)}</span></li>`;
+  };
+  return `<ul class="hb-checks">${v.checks.map(row).join('')}</ul>`;
+}
+let _hbTimer=null;
+function actHover(id){
+  if(_hbTimer){ clearTimeout(_hbTimer); _hbTimer=null; }
+  itn.select(modalUnitId); const a=actById(id); if(!a) return;
+  const r=a.isAllowed();
+  $('hoverbar').innerHTML=`<div class="hb-head"><b>${esc(a.description)}</b> <span class="rid">${esc(a.ruleId||'')} · ${a.category}</span></div>
+    <div class="hb-pc"><b>When:</b> ${esc(a.preconditions||'')}</div>
+    <div class="hb-oc"><b>Then:</b> ${esc(a.outcome||'')}</div>
+    <div class="hb-why ${r.ok?'ok':'no'}">${r.ok?'✓ available':'✗ blocked'} — ${esc(r.why)}${r.ok?'':' (total ✗ — at least one check failed)'}</div>
+    ${checksHTML(r)}`;
+  $('hoverbar').classList.add('show');
+}
+function actClear(){ _hbTimer=setTimeout(()=>$('hoverbar').classList.remove('show'),160); }
+
+/* ---------- item badges → self-explaining via the same hoverbar ---------- */
+// Plain-language meaning for every badge rendered on a service/extra line (keyed by status value, supplier status
+// value, or a short slug). bdg() wires each badge to badgeHover(key); unknown keys simply don't pop a hoverbar.
+const BADGE_HELP={
+  // status (seller intent)
+  NEW:'Status — not yet engaged with the supplier; the line is freely editable.',
+  HOLD_REQUESTED:'Status — a hold has been requested from the supplier but not yet granted.',
+  HELD:'Status — the supplier is holding space for this line, pending confirmation.',
+  CONFIRMED:'Status — seller intent is to book this line. The supplier status badge shows whether the supplier has actually agreed.',
+  CANCELLED:'Status — this line is cancelled. A live cancel-ask keeps tracking supplier status until the supplier acknowledges it.',
+  // supplier status (supplier sync)
+  NeedsRequest:'Supplier status — the current intent has not been sent to the supplier (or the sent figure is stale); a request is needed.',
+  AwaitingSupplier:'Supplier status — a request is out; waiting for the supplier to confirm or reject.',
+  NeedsDecision:'Supplier status — (reserved) a manual decision is required.',
+  Rejected:'Supplier status — the supplier refused the request. Resolve it: re-request, amend, or cancel.',
+  Booked:'Supplier status — the supplier-confirmed figure matches the current intent; nothing outstanding.',
+  // labels & flags
+  locked:'Locked — this line’s supplier is locked (a payment was recorded). Every item action is blocked; a Finance (FIN) user must Unlock the supplier in the Suppliers panel to release all its lines.',
+  'auto-confirm':'Auto-confirmed line (e.g. insurance) — booked on its own CONFIRMED voucher automatically when vouchers are sent; no manual supplier request.',
+  pendingOp:'A staged change to this line is waiting in the open pending change — applied (or dropped) when the change is resolved.',
+  PENDING:'This item exists only inside the open pending change; it joins the itinerary when the change is applied.',
+  hypothetical:'The system price is an unvalidated estimate — used for planning until Validate price confirms it.',
+  'manual-price':'A manual sell-side lever is set (manual total, manual margin or a per-line override) — overriding the system price.',
+  overpriced:'The sell price is above the rack (recommended retail) ceiling.',
+  underpriced:'The sell price is below cost (net) — the line is selling at a loss.',
+  UPDATED:'This CONFIRMED line was amended after agreement — the agreed figure is now stale and needs re-confirming.',
+  line:'The supplier voucher-line state and version backing this item.',
+  hold:'The most-relevant supplier hold on this line (HELD / EXPIRED / VOIDED). “·stale” means the held spec no longer covers the current intent.',
+  'hold mismatch':'The active hold no longer matches the current line spec (dates / qty / pax changed).',
+  'request on apply':'Applying the open change will send a fresh supplier request for this line.',
+  OPS_READY:'This line is operationally ready — all prerequisites for fulfilment are met.',
+  race:'A prior supplier request (still pending) was superseded — a versioning race worth watching.',
+  aside:'The supplier set this line aside in a non-standard state.',
+};
+// render a badge that explains itself on hover
+function bdg(key,cls,text){ return `<span class="badge ${cls}" onmouseover="badgeHover('${esc(String(key)).replace(/'/g,"\\'")}')" onmouseleave="actClear()">${text}</span>`; }
+function badgeHover(key){
+  if(_hbTimer){ clearTimeout(_hbTimer); _hbTimer=null; }
+  const help=BADGE_HELP[key]; if(!help){ $('hoverbar').classList.remove('show'); return; }
+  $('hoverbar').innerHTML=`<div class="hb-head"><b>${esc(key)}</b> <span class="rid">item badge</span></div>
+    <div class="hb-pc">${esc(help)}</div>`;
+  $('hoverbar').classList.add('show');
+}
+
+/* ---------- view config (read-only domain reference + source) ---------- */
+function openConfig(){
+  const a=acts();
+  const enumRows=Object.entries(CFG.enums).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${v.map(x=>`<span class="kbd">${esc(x)}</span>`).join(' ')}</td></tr>`).join('');
+  const supRows=Object.entries(CFG.suppliers).map(([id,s])=>`<tr><td>${id}</td><td>${esc(s.name)}</td><td>${Math.round(s.depositPct*100)}%</td><td>${s.balanceDays}d</td></tr>`).join('');
+  const constRows=Object.entries(CFG.constants).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td><span class="kbd">${esc(JSON.stringify(v))}</span></td></tr>`).join('');
+  const actRows=a.map(x=>`<tr>
+      <td><span class="cat cat-${x.category}">${x.category}</span></td>
+      <td><b>${esc(x.description)}</b><br><span class="hint">${esc(x.id)} · ${esc(x.ruleId||'')}</span></td>
+      <td>${esc(x.preconditions||'')}<br><span class="hint">→ ${esc(x.outcome||'')}</span>
+        ${hasInputs(x.params)?`<details><summary>params schema</summary><pre class="src">${esc(JSON.stringify(x.params,null,2))}</pre></details>`:''}
+        ${x.checks&&x.checks.length?`<details><summary>checks (${x.checks.length})</summary><ul class="hb-checks">${x.checks.map(c=>`<li><span class="ck-mk">•</span><span>${esc(c.description)}</span></li>`).join('')}</ul></details>`:''}
+        ${(()=>{const r=x.isAllowed();return r.checks&&r.checks.length?`<details><summary>checks (current state, ${r.checks.length}) — total ${r.ok?'✓':(r.gated?'✓*':'✗')}</summary>${checksHTML(r,true)}</details>`:'';})()}
+        <details><summary>isAllowed (code)</summary><pre class="src">${esc(x.isAllowed.code)}</pre></details>
+        <details><summary>execute (code)</summary><pre class="src">${esc(x.execute.code)}</pre></details></td>
+    </tr>`).join('');
+  // The CQRS query side — getViews() materialises the read-model catalogue with the same descriptor shape.
+  const v=itn.getViews();
+  const viewRows=v.map(x=>`<tr>
+      <td><span class="cat cat-${x.scope}">${x.scope}</span></td>
+      <td><b>${esc(x.description)}</b><br><span class="hint">${esc(x.id)} · ${esc(x.ruleId||'')}</span></td>
+      <td>${esc(x.reads||'')}<br><span class="hint">returns: ${esc(x.returns)}</span>
+        ${hasInputs(x.params)?`<details><summary>filters schema</summary><pre class="src">${esc(JSON.stringify(x.params,null,2))}</pre></details>`:''}
+        <details><summary>query (code)</summary><pre class="src">${esc(x.run.code)}</pre></details></td>
+    </tr>`).join('');
+  $('cfgmeta').textContent=CFG.meta.title+' · v'+CFG.meta.version+' · src '+CFG.meta.source;
+  $('cfgbody').innerHTML=`
+    <p class="hint">This is what the old rule editor showed — now read-only. The logic lives in real methods inside <span class="kbd">itny.js</span>; each action's actual <b>Enabled</b>/<b>Exec</b> source is expandable below.</p>
+    <h3>Enums</h3><table>${enumRows}</table>
+    <h3>Suppliers</h3><table><tr><th>id</th><th>name</th><th>deposit</th><th>balance</th></tr>${supRows}</table>
+    <h3>Constants</h3><table>${constRows}</table>
+    <h3>Action catalogue — getActions() (${a.length})</h3>
+    <table><tr><th>category</th><th>action</th><th>precondition / outcome / input / source</th></tr>${actRows}</table>
+    <h3>View catalogue — getViews() (${v.length})</h3>
+    <p class="hint">The CQRS <b>query</b> side: read-models materialised with the same descriptor shape as actions. Each <span class="kbd">query</span> delegates to a read-model method on <span class="kbd">itny.js</span>; the generated <b>{fn}Query</b> method runs it.</p>
+    <table><tr><th>scope</th><th>view</th><th>reads / returns / filters / source</th></tr>${viewRows}</table>`;
+  $('cfg').style.display='block';
+}
+function closeConfig(){ $('cfg').style.display='none'; }
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if($('dateModal').style.display==='flex'){ closeDateModal(); } else if($('formModal').style.display==='flex'){ fmClose(false); } else if($('cfg').style.display==='block'){ closeConfig(); } else if(modalPromoId){ closePromo(); } else if(modalDocId){ closeDoc(); } else if(modalVoucherId){ closeVoucher(); } else if(modalUnitId){ closeItemModal(); } }
+  else if(e.key==='Enter' && $('dateModal').style.display==='flex'){ e.preventDefault(); closeDateModal(true); }
+  else if(e.key==='Enter' && $('formModal').style.display==='flex'){ e.preventDefault(); fmClose(true); }
+});
+
+/* ---------- boot ---------- */
+(function(){ const a=_lsGet('itny.agency'); if(a && !itn.isBrochure()) itn.setAgency(a); })();   // restore the last-selected agency/agent
+(function(){ const u=_lsGet('itny.user'); if(u) itn.setCurrentUser(u); })();                    // restore the last-selected active user (SP|FIN)
+render();
+if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('resize', updateHH);
+</script>
+</body>
+</html>

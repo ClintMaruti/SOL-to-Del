@@ -1,0 +1,2 @@
+function i(t){const n=new Set,o=[];for(const e of t??[]){const a=e.id?.trim(),r=e.name?.trim(),s=a?`id:${a}`:r?`name:${r.toLowerCase()}`:`index:${o.length}`;n.has(s)||(n.add(s),o.push(e))}return o.sort((e,a)=>(e.name??"").localeCompare(a.name??"",void 0,{sensitivity:"base"})||(e.id??"").localeCompare(a.id??""))}function m(t,n=""){const o=i(t).map(e=>e.name?.trim()).filter(e=>!!e);return o.length>0?o.join(", "):n}function c(t){return i(t).map(n=>n.name??"").join(" ")}export{c as a,m as f,i as s};
+//# sourceMappingURL=agencyGroups-UAh00Yen.js.map

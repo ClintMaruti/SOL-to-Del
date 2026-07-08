@@ -1,0 +1,52 @@
+---
+description: Form and modal state reset to prevent data leakage and stale UI
+globs: "**/features/**/*.tsx,**/features/**/model/*.ts,**/widgets/**/ui/*.tsx"
+alwaysApply: false
+---
+
+# Form State & Modals
+
+Modals and forms must reset state when closed to avoid pre-filled data from previous edits and persistent validation errors.
+
+## Rules
+
+1. **Reset form when modal closes.** In a `useEffect` that depends on `open`, when `!open` call: `reset()` (form), `resetMutation()` (TanStack mutation). Prevents Create Agent modal showing data from a previously edited agent.
+2. **Clear validation on close.** Clear schema/field errors (e.g. `setSchemaError(undefined)`) when closing so they don't persist when reopening.
+3. **Unsaved changes flow.** After a successful save, mark form as not dirty before navigation. Use `scheduleNavigateAfterSave` so the unsaved-changes blocker doesn't show the dialog post-save.
+4. **Edit modals.** Initialize the form from the latest server data. Use `useAgent(id)` or similar so notes/fields reflect what was saved, not a stale prop.
+
+## Examples
+
+```typescript
+// GOOD: Reset on modal close
+useEffect(() => {
+  if (!open) {
+    reset();
+    resetCreateMutation();
+    resetUpdateMutation();
+  }
+}, [open, reset, resetCreateMutation, resetUpdateMutation]);
+```
+
+```typescript
+// GOOD: Reset form + clear validation
+useEffect(() => {
+  if (!open) {
+    form.reset();
+    setSchemaError(undefined);
+    resetMutation();
+  }
+}, [open]);
+```
+
+```typescript
+// GOOD: After save, schedule nav so blocker doesn't fire
+createAgent(data, {
+  onSuccess: () => {
+    reset();
+    scheduleNavigateAfterSave(exitPath);
+  },
+});
+```
+
+**Reference:** `features/create-agent/ui/CreateNewAgentModal.tsx`, `features/create-destination/ui/CreateDestinationModal.tsx`, `shared/hooks/useUnsavedChangesBlocker.ts`

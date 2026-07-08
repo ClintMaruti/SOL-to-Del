@@ -1,0 +1,44 @@
+---
+description: Internationalization - user-facing text via useTranslation/i18n.t, no hardcoded strings
+globs: "**/features/**/*.tsx,**/features/**/model/*.ts,**/widgets/**/*.tsx,**/pages/**/*.tsx,**/shared/**/*.tsx"
+alwaysApply: false
+---
+
+# Internationalization (i18n)
+
+All user-facing text must use i18next. No hardcoded strings in labels, buttons, toasts, messages, aria-labels, or placeholders.
+
+## Rules
+
+1. **Components (React):** Use `useTranslation` hook. Import: `import { useTranslation } from "react-i18next";` — `const { t } = useTranslation("admin");` — `{t("labels.firstName")}`.
+2. **Hooks, utils, non-component code:** Use `i18n.t()` directly. Import: `import { i18n } from "@sol/i18n";` — `i18n.t("modals.agencyCreatedSuccess", { ns: "admin" })`.
+3. **Locale files:** Add keys to `packages/i18n/src/locales/en/{namespace}.json` and `packages/i18n/src/locales/es/{namespace}.json`. Keep both locales in sync.
+4. **Namespace:** Admin app uses `admin` and `common`. Use `common` for shared strings (buttons.cancel, aria.formActions). Use `admin` for app-specific strings (modals, labels, errors).
+5. **Key structure:** Follow existing patterns — `modals.*` (toasts, dialog copy), `labels.*` (form labels), `errors.*` (error messages), `buttons.*` (button text), `aria.*` (accessibility).
+
+## Examples
+
+```tsx
+// GOOD: Component with useTranslation
+const { t } = useTranslation(["admin", "common"]);
+<Button>{t("common:buttons.cancel")}</Button>
+<span aria-label={t("common:aria.formActions")}>{t("admin:status.active")}</span>
+```
+
+```typescript
+// GOOD: Hook/utils with i18n.t
+toast.success(i18n.t("modals.agencyCreatedSuccess", { ns: "admin" }));
+toast.error(getErrorMessage(err, i18n.t("errors.failedToCreateAgency", { ns: "admin" })));
+```
+
+```tsx
+// BAD: Hardcoded strings
+<Button>Cancel</Button>
+toast.success("Agency created successfully");
+<span>Active</span>
+```
+
+## Reference
+
+- **Locale files:** `packages/i18n/src/locales/{en,es}/admin.json`, `common.json`
+- **Usage:** `features/create-agency/model/useCreateNewAgencyPage.ts`, `pages/SupplierDetailPage.tsx`, `widgets/supplier-detail/ui/SupplierDetailLayout.tsx`

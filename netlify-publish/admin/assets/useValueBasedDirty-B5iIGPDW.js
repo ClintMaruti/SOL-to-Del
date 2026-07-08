@@ -1,0 +1,2 @@
+import{r as c}from"./index-4ewCJrNr.js";import{f as r}from"./formDataEqual-CzmPqfth.js";function l(s,e,o,t){const[f,n]=c.useState(!1),[h,m]=c.useState(()=>e?{...e}:{...t}),p=r(s,h,o),x=e!=null&&r(s,e,o);c.useEffect(()=>{e!=null&&r(s,e,o)&&queueMicrotask(()=>n(!0))},[e,s,o]);const u=!p&&!x,S=e!=null?f&&u:u,B=c.useCallback(E=>{m({...E??e??t})},[e,t]);return{isDirty:S,reset:B,setBaseline:m,setHasSeenFormMatchingInitial:n}}export{l as u};
+//# sourceMappingURL=useValueBasedDirty-B5iIGPDW.js.map
