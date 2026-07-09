@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useItinerary } from "@/entities/itinerary";
 import type { ItineraryDetail, ItineraryStatus } from "@/entities/itinerary";
 import { AddServiceModal } from "@/features/add-itinerary-service";
+import { GuestDetailsDrawer } from "@/features/manage-itinerary-guests";
 import { ROUTES } from "@/shared/lib/paths";
 
 // ─── Status badge ────────────────────────────────────────────────────────────
@@ -92,12 +93,20 @@ const TABS = [
   "Finance",
 ] as const;
 
+type ItineraryDetailTab = (typeof TABS)[number];
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function ItineraryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ItineraryDetailTab>("Itinerary");
+  const [guestDrawerOpen, setGuestDrawerOpen] = useState(false);
+  const [paxOverride, setPaxOverride] = useState<Pick<
+    ItineraryDetail,
+    "adultsCount" | "childrenCount" | "infantsCount" | "childrenAges"
+  > | null>(null);
   const { data, isLoading, isError } = useItinerary(id);
 
   if (isLoading) {
@@ -116,14 +125,29 @@ export function ItineraryDetailPage() {
     );
   }
 
+  const itinerary = paxOverride ? { ...data, ...paxOverride } : data;
+
   const leadName =
-    data.leadTravelerFirstName || data.leadTravelerLastName
-      ? [data.leadTravelerFirstName, data.leadTravelerLastName]
+    itinerary.leadTravelerFirstName || itinerary.leadTravelerLastName
+      ? [itinerary.leadTravelerFirstName, itinerary.leadTravelerLastName]
           .filter(Boolean)
           .join(" ")
       : null;
 
-  const agentDisplay = data.agentName ?? data.agencyName;
+  const agentDisplay = itinerary.agentName ?? itinerary.agencyName;
+
+  const handleTabClick = (tab: ItineraryDetailTab) => {
+    if (tab === "Guests Details") {
+      setActiveTab(tab);
+      setGuestDrawerOpen(true);
+      return;
+    }
+
+    if (tab === "Itinerary") {
+      setActiveTab(tab);
+      setGuestDrawerOpen(false);
+    }
+  };
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col">
@@ -140,23 +164,27 @@ export function ItineraryDetailPage() {
           </button>
           <span>/</span>
           <span className="font-medium text-text-primary">
-            {data.reference}
+            {itinerary.reference}
           </span>
         </nav>
 
         {/* Tabs */}
         <div className="ml-6 flex items-end gap-0.5">
           {TABS.map((tab) => {
-            const isActive = tab === "Itinerary";
+            const isActive = tab === activeTab;
+            const isEnabled = tab === "Itinerary" || tab === "Guests Details";
             return (
               <button
                 key={tab}
                 type="button"
-                disabled={!isActive}
+                disabled={!isEnabled}
+                onClick={() => handleTabClick(tab)}
                 className={`px-4 py-3 text-sm font-medium transition-colors ${
                   isActive
                     ? "border-b-2 border-[#8B1515] text-[#8B1515]"
-                    : "text-text-tertiary cursor-default"
+                    : isEnabled
+                      ? "text-text-secondary hover:text-text-primary"
+                      : "cursor-default text-text-tertiary"
                 }`}
               >
                 {tab}
@@ -175,7 +203,7 @@ export function ItineraryDetailPage() {
             <div className="flex min-w-[120px] shrink-0 flex-col gap-2">
               <div className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold leading-[14px]">
                 <span className="text-text-tertiary">ID:</span>
-                <span className="text-text-primary">{data.reference}</span>
+                <span className="text-text-primary">{itinerary.reference}</span>
               </div>
               <button
                 type="button"
@@ -184,10 +212,10 @@ export function ItineraryDetailPage() {
                 <ChevronDown className="size-3 text-text-primary" />
                 <span className="flex items-center gap-1">
                   <span className="text-sm font-bold uppercase leading-[14px] tracking-[0.2px] text-text-primary">
-                    {STATUS_LABELS[data.status]}
+                    {STATUS_LABELS[itinerary.status]}
                   </span>
                   <span
-                    className={`size-2 shrink-0 rounded-full ${STATUS_DOT_COLORS[data.status]}`}
+                    className={`size-2 shrink-0 rounded-full ${STATUS_DOT_COLORS[itinerary.status]}`}
                   />
                 </span>
               </button>
@@ -195,15 +223,15 @@ export function ItineraryDetailPage() {
 
             {/* Meta fields */}
             <div className="flex min-w-0 items-center gap-6 overflow-x-auto">
-              <MetaField label="Title" value={data.title} />
+              <MetaField label="Title" value={itinerary.title} />
               <MetaField label="Lead Traveler" value={leadName} />
-              <MetaField label="Sales Support" value={data.salesSupportName} />
+              <MetaField label="Sales Support" value={itinerary.salesSupportName} />
               <MetaField
                 label="Safari Planner"
-                value={data.safariPlannerName}
+                value={itinerary.safariPlannerName}
               />
               <MetaField label="Agent" value={agentDisplay} />
-              <MetaField label="OPS" value={data.opsName} />
+              <MetaField label="OPS" value={itinerary.opsName} />
             </div>
           </div>
 
@@ -234,12 +262,12 @@ export function ItineraryDetailPage() {
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5 text-sm text-text-secondary">
             <Calendar className="size-4 text-text-tertiary" />
-            {formatDate(data.travelDateFrom)}
-            {data.travelDateTo && <> — {formatDate(data.travelDateTo)}</>}
+            {formatDate(itinerary.travelDateFrom)}
+            {itinerary.travelDateTo && <> — {formatDate(itinerary.travelDateTo)}</>}
           </span>
           <span className="flex items-center gap-1.5 text-sm text-text-secondary">
             <Users className="size-4 text-text-tertiary" />
-            {formatPax(data)}
+            {formatPax(itinerary)}
           </span>
           <div className="ml-auto">
             <Button
@@ -299,10 +327,22 @@ export function ItineraryDetailPage() {
           open={addServiceOpen}
           onOpenChange={setAddServiceOpen}
           itineraryId={id}
-          travelDateFrom={data.travelDateFrom}
-          travelDateTo={data.travelDateTo}
+          travelDateFrom={itinerary.travelDateFrom}
+          travelDateTo={itinerary.travelDateTo}
         />
       )}
+
+      <GuestDetailsDrawer
+        open={guestDrawerOpen}
+        onOpenChange={(open) => {
+          setGuestDrawerOpen(open);
+          if (!open && activeTab === "Guests Details") {
+            setActiveTab("Itinerary");
+          }
+        }}
+        itinerary={itinerary}
+        onPaxSaved={setPaxOverride}
+      />
     </div>
   );
 }

@@ -1318,6 +1318,51 @@
       "duplicateItinerary": "Duplicate itinerary",
       "editItinerary": "Edit itinerary",
       "removeFilter": "Remove filter"
+    },
+    "guestDetails": {
+      "title": "Guests Details",
+      "saveSuccess": "Guest details saved",
+      "modes": {
+        "manage": "Manage",
+        "assign": "Assign"
+      },
+      "placeholders": {
+        "typeHere": "Type here"
+      },
+      "manage": {
+        "adults": "Adults (18+ y.o.)",
+        "children": "Children (2-17 y.o.)",
+        "infants": "Infants (0-1 y.o.)",
+        "childrenAge": "Children Age",
+        "childLabel": "Child {{number}}",
+        "agePlaceholder": "Age"
+      },
+      "assign": {
+        "leadTraveler": "Lead Traveler",
+        "adult": "Adult {{number}}",
+        "child": "Child {{number}}",
+        "empty": "Add guests in Manage to assign traveler details.",
+        "firstName": "First Name",
+        "lastName": "Last Name",
+        "group": "Group",
+        "dateOfBirth": "DOB",
+        "age": "Age",
+        "internationalFlightDetails": "International Flight Details",
+        "dietaryRequirements": "Dietary Requirements",
+        "preferences": "Preferences",
+        "note": "Note",
+        "addContacts": "Add contacts",
+        "next": "Next",
+        "salutations": {
+          "Mrs": "Mrs",
+          "Ms": "Ms",
+          "Mr": "Mr"
+        }
+      },
+      "errors": {
+        "adultsRequired": "At least one adult is required.",
+        "childAgeRequired": "Select an age for each child."
+      }
     }
   },
   "create": {
